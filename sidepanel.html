@@ -35,9 +35,13 @@
         .btn-outline:hover { background: var(--bg); }
         .btn-danger { background: #fee2e2; color: var(--danger); }
         
-        .field-row { display: flex; gap: 8px; margin-bottom: 8px; align-items: center; }
-        .field-row input { margin-bottom: 0; }
-        .remove-field { background: none; border: none; color: var(--danger); cursor: pointer; font-size: 16px; padding: 4px; }
+        .field-row { display: flex; flex-direction: column; gap: 8px; margin-bottom: 12px; padding: 12px; background: #f9fafb; border: 1px solid var(--border); border-radius: 6px; position: relative; }
+        .field-row input, .field-row select { margin-bottom: 0; }
+        .field-row-top, .field-row-bottom { display: flex; gap: 8px; align-items: center; }
+        .remove-field { position: absolute; top: 4px; right: 4px; background: none; border: none; color: var(--danger); cursor: pointer; font-size: 14px; padding: 4px; border-radius: 4px;}
+        .remove-field:hover { background: #fee2e2; }
+        .inspect-btn { background: var(--surface); border: 1px solid var(--border); cursor: pointer; padding: 6px 10px; border-radius: 4px; font-size: 14px; display: flex; align-items: center; justify-content: center; }
+        .inspect-btn:hover { border-color: var(--primary); color: var(--primary); }
         
         /* Settings UI */
         .password-group { display: flex; align-items: stretch; margin-bottom: 12px; }
@@ -62,7 +66,7 @@
 
     <header>
         <h1>AI Digger</h1>
-        <button id="btn-inspect" class="btn btn-outline" style="width: auto; padding: 6px 12px; font-size: 12px;">🔍 Inspector Mode</button>
+        <span style="font-size: 12px; color: var(--text-muted);">Smart Web Scraper</span>
     </header>
 
     <div class="tabs">

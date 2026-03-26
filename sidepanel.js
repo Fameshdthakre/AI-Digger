@@ -20,29 +20,91 @@ document.getElementById('scrape-mode').addEventListener('change', (e) => {
 const fieldsContainer = document.getElementById('fields-container');
 let fieldCount = 0;
 
-function addFieldRow(name = '', selector = '', type = 'css') {
+function addFieldRow(name = '', selector = '', type = 'css', extractType = 'text', attrName = '') {
     fieldCount++;
+    const fieldId = `field_${Date.now()}_${fieldCount}`; // Unique ID for inspector mapping
     const div = document.createElement('div');
     div.className = 'field-row';
+    div.id = fieldId;
     div.innerHTML = `
-        <input type="text" placeholder="Field Name (e.g. Title)" class="f-name" value="${name}" style="flex: 1;" />
-        <select class="f-type" style="width: 80px; margin-bottom: 0;">
-            <option value="css" ${type === 'css' ? 'selected' : ''}>CSS</option>
-            <option value="ai" ${type === 'ai' ? 'selected' : ''}>AI Prompt</option>
-        </select>
-        <input type="text" placeholder="CSS Selector or AI Prompt" class="f-selector" value="${selector}" style="flex: 2;" />
-        <button class="remove-field" title="Remove Field">×</button>
+        <button class="remove-field" title="Remove Field">❌</button>
+        <div class="field-row-top">
+            <input type="text" placeholder="Field Name" class="f-name" value="${name}" style="flex: 1;" />
+            <select class="f-type" style="width: 100px;">
+                <option value="css" ${type === 'css' ? 'selected' : ''}>CSS</option>
+                <option value="xpath" ${type === 'xpath' ? 'selected' : ''}>XPath</option>
+                <option value="ai" ${type === 'ai' ? 'selected' : ''}>AI Prompt</option>
+            </select>
+            <select class="f-extract-target" style="width: 120px; ${type === 'ai' ? 'display: none;' : ''}">
+                <option value="text" ${extractType === 'text' ? 'selected' : ''}>Text (innerText)</option>
+                <option value="html" ${extractType === 'html' ? 'selected' : ''}>HTML (innerHTML)</option>
+                <option value="href" ${extractType === 'href' ? 'selected' : ''}>Link (href)</option>
+                <option value="src" ${extractType === 'src' ? 'selected' : ''}>Image (src)</option>
+                <option value="attribute" ${extractType === 'attribute' ? 'selected' : ''}>Custom Attribute</option>
+            </select>
+            <input type="text" class="f-attr-name" placeholder="attr name" value="${attrName}" style="width: 80px; ${extractType === 'attribute' ? '' : 'display: none;'}" />
+        </div>
+        <div class="field-row-bottom">
+            <button class="inspect-btn" title="Inspect Selector" style="${type === 'ai' ? 'display: none;' : ''}">🔍</button>
+            <input type="text" placeholder="CSS Selector, XPath, or AI Prompt" class="f-selector" value="${selector}" style="flex: 1;" />
+        </div>
     `;
+
+    // Remove button logic
     div.querySelector('.remove-field').addEventListener('click', () => div.remove());
 
+    // Type change logic (CSS/XPath/AI)
     const typeSelect = div.querySelector('.f-type');
+    const targetSelect = div.querySelector('.f-extract-target');
+    const attrInput = div.querySelector('.f-attr-name');
     const selectorInput = div.querySelector('.f-selector');
+    const inspectBtn = div.querySelector('.inspect-btn');
+
     typeSelect.addEventListener('change', (e) => {
         if (e.target.value === 'ai') {
+            targetSelect.style.display = 'none';
+            attrInput.style.display = 'none';
+            inspectBtn.style.display = 'none';
             selectorInput.placeholder = "e.g. What is the product price?";
         } else {
-            selectorInput.placeholder = "CSS Selector (e.g. h1.title)";
+            targetSelect.style.display = 'block';
+            if (targetSelect.value === 'attribute') {
+                attrInput.style.display = 'block';
+            }
+            inspectBtn.style.display = 'flex';
+            selectorInput.placeholder = e.target.value === 'xpath' ? "XPath (e.g. //h1[@class='title'])" : "CSS Selector (e.g. h1.title)";
         }
+    });
+
+    // Extract target change logic (Text/HTML/Href/etc)
+    targetSelect.addEventListener('change', (e) => {
+        if (e.target.value === 'attribute') {
+            attrInput.style.display = 'block';
+        } else {
+            attrInput.style.display = 'none';
+        }
+    });
+
+    // Inspect button logic
+    inspectBtn.addEventListener('click', async () => {
+        const [tab] = await chrome.tabs.query({active: true, currentWindow: true});
+
+        // Inject script programmatically if it's not already there
+        await chrome.scripting.executeScript({
+            target: { tabId: tab.id },
+            files: ['content.js']
+        }).catch(err => console.error("Failed to inject content.js:", err));
+
+        const mode = typeSelect.value; // css or xpath
+
+        chrome.tabs.sendMessage(tab.id, { action: 'START_INSPECTOR_FOR_FIELD', fieldId: fieldId, mode: mode }, (response) => {
+            if (response && response.status === 'inspector_started') {
+                // Change button style to indicate it's active
+                inspectBtn.style.backgroundColor = '#e0f2fe';
+                inspectBtn.style.borderColor = '#3b82f6';
+                inspectBtn.innerText = '🎯';
+            }
+        });
     });
 
     fieldsContainer.appendChild(div);
@@ -51,7 +113,8 @@ function addFieldRow(name = '', selector = '', type = 'css') {
 document.getElementById('add-field').addEventListener('click', () => addFieldRow());
 
 // Add default fields to start
-addFieldRow('Product Name', 'h1', 'css');
+addFieldRow('Product Name', 'h1', 'css', 'text');
+addFieldRow('Product Link', 'a.product-link', 'css', 'href');
 addFieldRow('Summary', 'Summarize the product in one sentence', 'ai');
 
 // === AI Settings Logic ===
@@ -116,20 +179,26 @@ chrome.storage.sync.get(['aiSettings'], (result) => {
 
 // === Extension Logic ===
 
-// 1. Visual Inspector Toggle
-document.getElementById('btn-inspect').addEventListener('click', async () => {
-    const [tab] = await chrome.tabs.query({active: true, currentWindow: true});
+// Listen for inspector results from content script
+chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+    if (message.action === 'INSPECTOR_RESULT') {
+        const { fieldId, selector } = message;
+        const fieldRow = document.getElementById(fieldId);
+        if (fieldRow) {
+            const selectorInput = fieldRow.querySelector('.f-selector');
+            selectorInput.value = selector;
 
-    // Inject script programmatically if it's not already there
-    await chrome.scripting.executeScript({
-        target: { tabId: tab.id },
-        files: ['content.js']
-    }).catch(err => console.error("Failed to inject content.js:", err));
-
-    chrome.tabs.sendMessage(tab.id, {action: 'TOGGLE_INSPECTOR'}, (response) => {
-        window.close(); // Close popup so user can see the webpage and use inspector
-    });
+            // Reset button style
+            const inspectBtn = fieldRow.querySelector('.inspect-btn');
+            inspectBtn.style.backgroundColor = 'var(--surface)';
+            inspectBtn.style.borderColor = 'var(--border)';
+            inspectBtn.innerText = '🔍';
+        }
+        sendResponse({ status: 'received' });
+    }
+    return true;
 });
+
 
 // 2. Start Job
 document.getElementById('btn-start').addEventListener('click', () => {
@@ -140,7 +209,9 @@ document.getElementById('btn-start').addEventListener('click', () => {
         fields: Array.from(document.querySelectorAll('.field-row')).map(row => ({
             name: row.querySelector('.f-name').value,
             selector: row.querySelector('.f-selector').value,
-            type: row.querySelector('.f-type').value // 'css' or 'ai'
+            type: row.querySelector('.f-type').value, // 'css', 'xpath', 'ai'
+            extractType: row.querySelector('.f-extract-target').value, // 'text', 'html', 'href', 'src', 'attribute'
+            attributeName: row.querySelector('.f-attr-name').value
         })).filter(f => f.name && f.selector),
         antiBot: {
             minDelayMs: parseInt(document.getElementById('min-delay').value),
