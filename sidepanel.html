@@ -1,0 +1,218 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Universal Scraper</title>
+    <style>
+        /* Minimalist Modern UI - No external CSS required */
+        :root {
+            --bg: #f9fafb; --surface: #ffffff; --primary: #3b82f6; --primary-hover: #2563eb;
+            --text-main: #111827; --text-muted: #6b7280; --border: #e5e7eb; --danger: #ef4444;
+        }
+        body { font-family: system-ui, -apple-system, sans-serif; background: var(--bg); color: var(--text-main); width: 100%; height: 100vh; margin: 0; padding: 0; display: flex; flex-direction: column; }
+        header { background: var(--surface); padding: 16px 20px; border-bottom: 1px solid var(--border); display: flex; justify-content: space-between; align-items: center; flex-shrink: 0; }
+        h1 { margin: 0; font-size: 18px; font-weight: 700; color: var(--primary); }
+        .tabs { display: flex; border-bottom: 1px solid var(--border); background: var(--surface); flex-shrink: 0; }
+        .tab { flex: 1; padding: 12px; text-align: center; font-size: 14px; font-weight: 600; cursor: pointer; color: var(--text-muted); border-bottom: 2px solid transparent; }
+        .tab.active { color: var(--primary); border-bottom-color: var(--primary); }
+        
+        .container { padding: 20px; flex-grow: 1; overflow-y: auto; }
+        .view { display: none; }
+        .view.active { display: block; }
+        
+        .card { background: var(--surface); padding: 16px; border-radius: 8px; border: 1px solid var(--border); margin-bottom: 16px; box-shadow: 0 1px 2px rgba(0,0,0,0.05); }
+        .form-group { margin-bottom: 12px; }
+        label { display: block; font-size: 12px; font-weight: 600; color: var(--text-muted); margin-bottom: 4px; }
+        input, select, textarea { width: 100%; box-sizing: border-box; padding: 8px 12px; border: 1px solid var(--border); border-radius: 6px; font-size: 14px; outline: none; transition: border 0.2s; }
+        input:focus, select:focus, textarea:focus { border-color: var(--primary); }
+        textarea { resize: vertical; min-height: 60px; font-family: monospace; font-size: 12px;}
+        
+        .btn { display: inline-block; width: 100%; padding: 10px; font-size: 14px; font-weight: 600; text-align: center; border: none; border-radius: 6px; cursor: pointer; transition: background 0.2s; box-sizing: border-box; }
+        .btn-primary { background: var(--primary); color: white; }
+        .btn-primary:hover { background: var(--primary-hover); }
+        .btn-outline { background: transparent; border: 1px solid var(--border); color: var(--text-main); }
+        .btn-outline:hover { background: var(--bg); }
+        .btn-danger { background: #fee2e2; color: var(--danger); }
+        
+        .field-row { display: flex; gap: 8px; margin-bottom: 8px; align-items: center; }
+        .field-row input { margin-bottom: 0; }
+        .remove-field { background: none; border: none; color: var(--danger); cursor: pointer; font-size: 16px; padding: 4px; }
+        
+        /* Settings UI */
+        .password-group { display: flex; align-items: stretch; margin-bottom: 12px; }
+        .password-group input { border-radius: 6px 0 0 6px; border-right: none; margin-bottom: 0; }
+        .password-group button { border-radius: 0 6px 6px 0; border: 1px solid var(--border); background: var(--bg); color: var(--text-muted); cursor: pointer; padding: 0 12px; font-size: 14px; }
+        .provider-card { border-left: 3px solid var(--border); padding-left: 12px; margin-bottom: 16px; }
+        .provider-card.active-provider { border-left-color: var(--primary); }
+
+        /* Utility */
+        .flex { display: flex; gap: 12px; }
+        .flex-1 { flex: 1; }
+        .mt-2 { margin-top: 8px; }
+        .mt-4 { margin-top: 16px; }
+        .mb-4 { margin-bottom: 16px; }
+        
+        /* Stats */
+        .stat-box { text-align: center; padding: 20px; background: var(--surface); border-radius: 8px; border: 1px solid var(--border); }
+        .stat-number { font-size: 32px; font-weight: 800; color: var(--primary); }
+    </style>
+</head>
+<body>
+
+    <header>
+        <h1>AI Digger</h1>
+        <button id="btn-inspect" class="btn btn-outline" style="width: auto; padding: 6px 12px; font-size: 12px;">🔍 Inspector Mode</button>
+    </header>
+
+    <div class="tabs">
+        <div class="tab active" data-target="view-build">Build Blueprint</div>
+        <div class="tab" data-target="view-run">Run & Export</div>
+        <div class="tab" data-target="view-settings">⚙️ Settings</div>
+    </div>
+
+    <div class="container">
+        
+        <!-- BUILD VIEW -->
+        <div id="view-build" class="view active">
+            <div class="card">
+                <div class="form-group">
+                    <label>Job Name</label>
+                    <input type="text" id="job-name" value="My Scraper Job" />
+                </div>
+                <div class="form-group">
+                    <label>Scraping Mode</label>
+                    <select id="scrape-mode">
+                        <option value="single-page">Single Page (Current Tab)</option>
+                        <option value="multi-url">Multi-URL List</option>
+                    </select>
+                </div>
+                <div class="form-group" id="url-list-group" style="display: none;">
+                    <label>Target URLs (One per line)</label>
+                    <textarea id="url-list" placeholder="https://example.com/page1&#10;https://example.com/page2"></textarea>
+                </div>
+            </div>
+
+            <div class="card">
+                <label>Data Fields to Extract</label>
+                <div id="fields-container">
+                    <!-- Fields injected here via JS -->
+                </div>
+                <button id="add-field" class="btn btn-outline mt-2" style="font-size: 12px; padding: 6px;">+ Add Data Field</button>
+            </div>
+
+            <div class="card">
+                <label>Anti-Bot Settings (Delays)</label>
+                <div class="flex mt-2">
+                    <div class="flex-1">
+                        <label>Min Delay (ms)</label>
+                        <input type="number" id="min-delay" value="2000" />
+                    </div>
+                    <div class="flex-1">
+                        <label>Max Delay (ms)</label>
+                        <input type="number" id="max-delay" value="5000" />
+                    </div>
+                </div>
+                <div class="flex mt-2">
+                    <div class="flex-1">
+                        <label>Batch Size</label>
+                        <input type="number" id="batch-size" value="10" placeholder="0 to disable" />
+                    </div>
+                    <div class="flex-1">
+                        <label>Batch Pause (ms)</label>
+                        <input type="number" id="batch-pause" value="10000" />
+                    </div>
+                </div>
+            </div>
+
+            <button id="btn-start" class="btn btn-primary mb-4">▶ Start Scraping Job</button>
+        </div>
+
+        <!-- RUN & EXPORT VIEW -->
+        <div id="view-run" class="view">
+            <div class="stat-box mb-4">
+                <label>Rows Scraped</label>
+                <div class="stat-number" id="stat-count">0</div>
+                <div id="status-indicator" style="font-size: 12px; color: var(--text-muted); margin-top: 8px;">Idle</div>
+            </div>
+
+            <div class="card">
+                <button id="btn-stop" class="btn btn-danger mb-4" style="display: none;">⏹ Stop Running Job</button>
+                <label>Export Data</label>
+                <button id="btn-export-csv" class="btn btn-primary mt-2">Download as CSV</button>
+                <button id="btn-clear" class="btn btn-outline mt-2">Clear Stored Data</button>
+            </div>
+        </div>
+
+        <!-- SETTINGS VIEW -->
+        <div id="view-settings" class="view">
+            <div class="card">
+                <div class="form-group">
+                    <label>Default AI Platform</label>
+                    <select id="default-ai-platform">
+                        <option value="openai">OpenAI</option>
+                        <option value="gemini">Google Gemini</option>
+                        <option value="claude">Anthropic Claude</option>
+                    </select>
+                </div>
+            </div>
+
+            <div class="card">
+                <div class="provider-card" id="card-openai">
+                    <label>OpenAI Settings</label>
+                    <div class="form-group">
+                        <div class="password-group">
+                            <input type="password" id="key-openai" placeholder="sk-..." />
+                            <button type="button" class="toggle-vis" data-target="key-openai">👁️</button>
+                        </div>
+                        <input type="text" id="model-openai" list="models-openai" placeholder="Model (e.g. gpt-4o)" />
+                        <datalist id="models-openai">
+                            <option value="gpt-4o">
+                            <option value="gpt-4o-mini">
+                            <option value="gpt-3.5-turbo">
+                        </datalist>
+                    </div>
+                </div>
+
+                <div class="provider-card" id="card-gemini">
+                    <label>Google Gemini Settings</label>
+                    <div class="form-group">
+                        <div class="password-group">
+                            <input type="password" id="key-gemini" placeholder="AIza..." />
+                            <button type="button" class="toggle-vis" data-target="key-gemini">👁️</button>
+                        </div>
+                        <input type="text" id="model-gemini" list="models-gemini" placeholder="Model (e.g. gemini-2.5-flash)" />
+                        <datalist id="models-gemini">
+                            <option value="gemini-2.5-flash">
+                            <option value="gemini-2.5-pro">
+                            <option value="gemini-1.5-flash">
+                        </datalist>
+                    </div>
+                </div>
+
+                <div class="provider-card" id="card-claude">
+                    <label>Anthropic Claude Settings</label>
+                    <div class="form-group">
+                        <div class="password-group">
+                            <input type="password" id="key-claude" placeholder="sk-ant-..." />
+                            <button type="button" class="toggle-vis" data-target="key-claude">👁️</button>
+                        </div>
+                        <input type="text" id="model-claude" list="models-claude" placeholder="Model (e.g. claude-3-5-sonnet-20241022)" />
+                        <datalist id="models-claude">
+                            <option value="claude-3-5-sonnet-20241022">
+                            <option value="claude-3-haiku-20240307">
+                            <option value="claude-3-opus-20240229">
+                        </datalist>
+                    </div>
+                </div>
+
+                <button id="btn-save-settings" class="btn btn-primary mt-4">Save Settings</button>
+                <div id="settings-msg" style="color: #22c55e; font-size: 12px; margin-top: 8px; display: none; text-align: center;">Settings saved successfully!</div>
+            </div>
+        </div>
+
+    </div>
+
+    <script src="sidepanel.js"></script>
+</body>
+</html>
