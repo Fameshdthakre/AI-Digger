@@ -388,16 +388,31 @@ chrome.storage.sync.get(['aiSettings'], (result) => {
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     if (message.action === 'INSPECTOR_RESULT') {
         const { fieldId, selector } = message;
-        const fieldRow = document.getElementById(fieldId);
-        if (fieldRow) {
-            const selectorInput = fieldRow.querySelector('.f-selector');
-            selectorInput.value = selector;
 
-            // Reset button style
-            const inspectBtn = fieldRow.querySelector('.inspect-btn');
-            inspectBtn.style.backgroundColor = 'var(--surface)';
-            inspectBtn.style.borderColor = 'var(--border)';
-            inspectBtn.innerText = '🔍';
+        if (fieldId === 'next-button-selector') {
+            const selectorInput = document.getElementById('next-button-selector');
+            if (selectorInput) selectorInput.value = selector;
+
+            const inspectBtn = document.getElementById('inspect-next-btn');
+            if (inspectBtn) {
+                inspectBtn.style.backgroundColor = 'var(--surface)';
+                inspectBtn.style.borderColor = 'var(--border)';
+                inspectBtn.innerText = '🔍';
+            }
+        } else {
+            const fieldRow = document.getElementById(fieldId);
+            if (fieldRow) {
+                const selectorInput = fieldRow.querySelector('.f-selector');
+                if (selectorInput) selectorInput.value = selector;
+
+                // Reset button style
+                const inspectBtn = fieldRow.querySelector('.inspect-btn');
+                if (inspectBtn) {
+                    inspectBtn.style.backgroundColor = 'var(--surface)';
+                    inspectBtn.style.borderColor = 'var(--border)';
+                    inspectBtn.innerText = '🔍';
+                }
+            }
         }
         sendResponse({ status: 'received' });
     }
