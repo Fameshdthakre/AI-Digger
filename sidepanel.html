@@ -134,6 +134,19 @@
                 <label>Rows Scraped</label>
                 <div class="stat-number" id="stat-count">0</div>
                 <div id="status-indicator" style="font-size: 12px; color: var(--text-muted); margin-top: 8px;">Idle</div>
+
+                <div id="progress-container" style="display: none; margin-top: 12px; text-align: left;">
+                    <label style="display: flex; justify-content: space-between;">
+                        <span>Progress</span>
+                        <span id="progress-text">0 / 0</span>
+                    </label>
+                    <progress id="job-progress" value="0" max="100" style="width: 100%; height: 8px; border-radius: 4px; overflow: hidden;"></progress>
+                </div>
+            </div>
+
+            <div class="card" id="logs-card" style="display: none; flex-direction: column; height: 150px;">
+                <label>Execution Logs</label>
+                <div id="job-logs" style="flex: 1; overflow-y: auto; background: #f3f4f6; padding: 8px; border-radius: 4px; font-family: monospace; font-size: 11px; color: #374151; white-space: pre-wrap; border: 1px solid var(--border);"></div>
             </div>
 
             <div class="card">

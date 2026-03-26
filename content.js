@@ -4,6 +4,11 @@
  * and the actual DOM extraction logic when a job is running.
  */
 
+if (window.hasRun) {
+    // Prevent multiple injections
+} else {
+window.hasRun = true;
+
 let inspectorActive = false;
 let hoveredElement = null;
 let overlayBox = null;
@@ -173,7 +178,14 @@ function executeExtraction(blueprint) {
     result['URL'] = window.location.href;
     result['Timestamp'] = new Date().toISOString();
 
+    let needsAi = false;
+
     blueprint.fields.forEach(field => {
+        if (field.type === 'ai') {
+            needsAi = true;
+            return; // Skip AI fields here, handled in background
+        }
+
         try {
             const elements = document.querySelectorAll(field.selector);
             if (elements.length === 0) {
@@ -182,21 +194,27 @@ function executeExtraction(blueprint) {
             }
 
             // For simplicity, we grab the first matching element per page for now.
-            // If the user wants a list (e.g., all products on a page), we'd iterate here.
             const el = elements[0];
             
-            if (field.type === 'text') {
+            if (field.type === 'text' || field.type === 'css') {
                 result[field.name] = el.innerText.trim();
             } else if (field.type === 'attribute' && field.attributeName) {
                 result[field.name] = el.getAttribute(field.attributeName);
             } else if (field.type === 'html') {
                 result[field.name] = el.innerHTML;
             }
+
         } catch (e) {
             console.error(`Error extracting field ${field.name}:`, e);
             result[field.name] = "ERROR";
         }
     });
 
+    if (needsAi) {
+        // Send page text back as a special field
+        result['_pageText'] = document.body.innerText.trim();
+    }
+
     return result;
+}
 }

@@ -20,24 +20,39 @@ document.getElementById('scrape-mode').addEventListener('change', (e) => {
 const fieldsContainer = document.getElementById('fields-container');
 let fieldCount = 0;
 
-function addFieldRow(name = '', selector = '') {
+function addFieldRow(name = '', selector = '', type = 'css') {
     fieldCount++;
     const div = document.createElement('div');
     div.className = 'field-row';
     div.innerHTML = `
         <input type="text" placeholder="Field Name (e.g. Title)" class="f-name" value="${name}" style="flex: 1;" />
-        <input type="text" placeholder="CSS Selector (e.g. h1.title)" class="f-selector" value="${selector}" style="flex: 2;" />
+        <select class="f-type" style="width: 80px; margin-bottom: 0;">
+            <option value="css" ${type === 'css' ? 'selected' : ''}>CSS</option>
+            <option value="ai" ${type === 'ai' ? 'selected' : ''}>AI Prompt</option>
+        </select>
+        <input type="text" placeholder="CSS Selector or AI Prompt" class="f-selector" value="${selector}" style="flex: 2;" />
         <button class="remove-field" title="Remove Field">×</button>
     `;
     div.querySelector('.remove-field').addEventListener('click', () => div.remove());
+
+    const typeSelect = div.querySelector('.f-type');
+    const selectorInput = div.querySelector('.f-selector');
+    typeSelect.addEventListener('change', (e) => {
+        if (e.target.value === 'ai') {
+            selectorInput.placeholder = "e.g. What is the product price?";
+        } else {
+            selectorInput.placeholder = "CSS Selector (e.g. h1.title)";
+        }
+    });
+
     fieldsContainer.appendChild(div);
 }
 
 document.getElementById('add-field').addEventListener('click', () => addFieldRow());
 
 // Add default fields to start
-addFieldRow('Product Name', 'h1');
-addFieldRow('Price', '.price');
+addFieldRow('Product Name', 'h1', 'css');
+addFieldRow('Summary', 'Summarize the product in one sentence', 'ai');
 
 // === AI Settings Logic ===
 
@@ -72,7 +87,7 @@ document.getElementById('btn-save-settings').addEventListener('click', () => {
         claude: { key: document.getElementById('key-claude').value, model: document.getElementById('model-claude').value }
     };
     
-    chrome.storage.local.set({ aiSettings: settings }, () => {
+    chrome.storage.sync.set({ aiSettings: settings }, () => {
         const msg = document.getElementById('settings-msg');
         msg.style.display = 'block';
         setTimeout(() => msg.style.display = 'none', 3000);
@@ -80,7 +95,7 @@ document.getElementById('btn-save-settings').addEventListener('click', () => {
 });
 
 // Load Settings
-chrome.storage.local.get(['aiSettings'], (result) => {
+chrome.storage.sync.get(['aiSettings'], (result) => {
     if (result.aiSettings) {
         const s = result.aiSettings;
         if (s.aiPlatform) {
@@ -104,6 +119,13 @@ chrome.storage.local.get(['aiSettings'], (result) => {
 // 1. Visual Inspector Toggle
 document.getElementById('btn-inspect').addEventListener('click', async () => {
     const [tab] = await chrome.tabs.query({active: true, currentWindow: true});
+
+    // Inject script programmatically if it's not already there
+    await chrome.scripting.executeScript({
+        target: { tabId: tab.id },
+        files: ['content.js']
+    }).catch(err => console.error("Failed to inject content.js:", err));
+
     chrome.tabs.sendMessage(tab.id, {action: 'TOGGLE_INSPECTOR'}, (response) => {
         window.close(); // Close popup so user can see the webpage and use inspector
     });
@@ -118,7 +140,7 @@ document.getElementById('btn-start').addEventListener('click', () => {
         fields: Array.from(document.querySelectorAll('.field-row')).map(row => ({
             name: row.querySelector('.f-name').value,
             selector: row.querySelector('.f-selector').value,
-            type: 'text' // Hardcoded text for V1, can expand to attribute later
+            type: row.querySelector('.f-type').value // 'css' or 'ai'
         })).filter(f => f.name && f.selector),
         antiBot: {
             minDelayMs: parseInt(document.getElementById('min-delay').value),
@@ -146,14 +168,41 @@ function updateStatus() {
         if(!response) return;
         document.getElementById('stat-count').innerText = response.scrapedCount || 0;
         
+        const progContainer = document.getElementById('progress-container');
+        const progBar = document.getElementById('job-progress');
+        const progText = document.getElementById('progress-text');
+        const logsCard = document.getElementById('logs-card');
+        const logsBox = document.getElementById('job-logs');
+
         if (response.isRunning) {
             document.getElementById('status-indicator').innerText = "Scraping in progress...";
             document.getElementById('status-indicator').style.color = "#22c55e";
             document.getElementById('btn-stop').style.display = 'block';
+
+            if (response.jobProgress && response.jobProgress.total > 0) {
+                progContainer.style.display = 'block';
+                progBar.max = response.jobProgress.total;
+                progBar.value = response.jobProgress.current;
+                progText.innerText = `${response.jobProgress.current} / ${response.jobProgress.total}`;
+            }
+
+            if (response.jobLogs && response.jobLogs.length > 0) {
+                logsCard.style.display = 'flex';
+                logsBox.innerText = response.jobLogs.join('\n');
+                logsBox.scrollTop = logsBox.scrollHeight;
+            }
         } else {
             document.getElementById('status-indicator').innerText = "Idle";
             document.getElementById('status-indicator').style.color = "var(--text-muted)";
             document.getElementById('btn-stop').style.display = 'none';
+            progContainer.style.display = 'none';
+
+            // Keep logs visible if there are any from a recently finished job
+            if (response.jobLogs && response.jobLogs.length > 0) {
+                logsCard.style.display = 'flex';
+                logsBox.innerText = response.jobLogs.join('\n');
+                logsBox.scrollTop = logsBox.scrollHeight;
+            }
         }
     });
 }
