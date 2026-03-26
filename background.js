@@ -36,6 +36,13 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         scrapedData = [];
         chrome.storage.local.set({ scrapedData: [] });
         sendResponse({ status: 'cleared' });
+    } else if (message.action === 'ANALYZE_PAGE_AI') {
+        analyzePageWithAI(message.text).then(fields => {
+            chrome.runtime.sendMessage({ action: 'AI_ANALYZE_RESULT', fields: fields });
+        }).catch(err => {
+            chrome.runtime.sendMessage({ action: 'AI_ANALYZE_RESULT', error: err.message });
+        });
+        sendResponse({ status: 'analyzing' });
     }
     return true; // Keep message channel open for async responses
 });
@@ -75,6 +82,8 @@ async function startJob(blueprint) {
 
                 await ensureScriptInjected(tab.id);
 
+                await executeActions(tab.id, currentJob.actions);
+
                 let extractedData = await scrapeTab(tab.id, currentJob, url);
                 if (extractedData) saveExtractedData(extractedData);
 
@@ -104,10 +113,26 @@ async function startJob(blueprint) {
 
         await ensureScriptInjected(tab.id);
 
+        await executeActions(tab.id, blueprint.actions);
+
+        // Ensure there is at least one CSS/XPath field to wait for to determine page loaded
+        const firstSelectorField = blueprint.fields.find(f => f.type !== 'ai');
+
         for (let page = 1; page <= maxPages; page++) {
             if (!isRunning) break;
             jobProgress.current = page;
             addLog(`Scraping Page ${page} of ${maxPages}...`);
+
+            // Smart Wait: Wait for the first configured element to appear in DOM before extracting
+            if (firstSelectorField) {
+                addLog(`Waiting for ${firstSelectorField.name} to appear...`);
+                const waitRes = await chrome.tabs.sendMessage(tab.id, { action: 'WAIT_FOR_ELEMENT', selector: firstSelectorField.selector }).catch(()=>null);
+                if (waitRes && waitRes.status === 'timeout') {
+                    addLog(`Timeout waiting for element. Continuing anyway.`);
+                }
+            } else {
+                await sleep(2000); // fallback
+            }
 
             // Infinite Scroll Logic
             if (blueprint.singlePageOptions?.infiniteScroll) {
@@ -118,9 +143,6 @@ async function startJob(blueprint) {
                     await chrome.tabs.sendMessage(tab.id, { action: 'SCROLL_BOTTOM' }).catch(()=>null);
                     await sleep(getRandomDelay(blueprint.antiBot.minDelayMs, blueprint.antiBot.maxDelayMs));
                 }
-            } else {
-                // Wait basic load if not scrolling
-                await sleep(2000);
             }
 
             let extractedData = await scrapeTab(tab.id, currentJob, tab.url);
@@ -141,11 +163,8 @@ async function startJob(blueprint) {
                     break;
                 }
 
-                // Wait for page transition / load
-                let delayMs = getRandomDelay(blueprint.antiBot.minDelayMs, blueprint.antiBot.maxDelayMs);
-                await sleep(delayMs + 2000); // add fixed buffer for render
-
-                // Re-inject script in case page navigation cleared it
+                // Re-inject script in case page navigation cleared it (with retry wrapper)
+                await sleep(1000);
                 await ensureScriptInjected(tab.id);
             }
         }
@@ -164,6 +183,23 @@ async function ensureScriptInjected(tabId) {
         });
     } catch (err) {
         addLog(`Note: content script inject err (may already exist)`);
+    }
+}
+
+async function executeActions(tabId, actions) {
+    if (!actions || actions.length === 0) return;
+
+    addLog(`Running ${actions.length} pre-extraction actions...`);
+    for (let i = 0; i < actions.length; i++) {
+        const a = actions[i];
+        addLog(`Action: [${a.type}] on ${a.selector}`);
+        const res = await chrome.tabs.sendMessage(tabId, { action: 'EXECUTE_ACTION', actionData: a }).catch(() => null);
+        if (res && res.status === 'failed') {
+            addLog(`Action failed: ${a.type} on ${a.selector}`);
+        } else {
+            // Small buffer between actions
+            await sleep(500);
+        }
     }
 }
 
@@ -291,6 +327,110 @@ async function processAIExtraction(blueprint, text) {
     } catch (e) {
         console.error("Failed to parse AI response as JSON", resultJsonStr);
         throw new Error("AI returned invalid JSON.");
+    }
+}
+
+// Helper: AI Blueprint Analyzer Caller
+async function analyzePageWithAI(text) {
+    const settingsObj = await chrome.storage.sync.get(['aiSettings']);
+    const settings = settingsObj.aiSettings;
+
+    if (!settings || !settings.aiPlatform) {
+        throw new Error("AI Platform not configured in settings. Please setup your API keys in the Settings tab.");
+    }
+
+    const systemPrompt = `You are an expert web scraping assistant. I will provide you with the text content of a webpage.
+    Your goal is to figure out what type of page this is (e.g., E-commerce product list, Real Estate listings, News Articles, etc.)
+    and suggest the optimal data fields a user would want to extract.
+
+    Return your response strictly as a JSON array of objects. Do not wrap in markdown tags.
+    Each object must have exactly these keys:
+    - "name": string (e.g. "Product Price")
+    - "selector": string (the exact AI prompt to extract this field, e.g. "What is the price of the item?")
+    - "type": "ai"
+    - "multiple": boolean (true if it's a list/grid of items, false if it's a single page item)
+    `;
+
+    const truncatedText = text.substring(0, 20000);
+    const prompt = `${systemPrompt}\n\nWebpage Text:\n"""\n${truncatedText}\n"""`;
+
+    let resultJsonStr = "[]";
+
+    if (settings.aiPlatform === 'openai') {
+        const apiKey = settings.openai.key;
+        const model = settings.openai.model || 'gpt-4o';
+        if (!apiKey) throw new Error("OpenAI API key missing.");
+
+        const response = await fetch('https://api.openai.com/v1/chat/completions', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${apiKey}` },
+            body: JSON.stringify({
+                model: model,
+                messages: [{ role: "user", content: prompt }],
+                temperature: 0.1,
+                response_format: { type: "json_object" } // Using json_object wrapper to enforce structure
+            })
+        });
+        if (!response.ok) throw new Error(`OpenAI API error: ${response.statusText}`);
+        const data = await response.json();
+        resultJsonStr = data.choices[0].message.content;
+
+    } else if (settings.aiPlatform === 'gemini') {
+        const apiKey = settings.gemini.key;
+        const model = settings.gemini.model || 'gemini-2.5-flash';
+        if (!apiKey) throw new Error("Gemini API key missing.");
+
+        const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                contents: [{ parts: [{ text: prompt }] }],
+                generationConfig: { responseMimeType: "application/json" }
+            })
+        });
+        if (!response.ok) throw new Error(`Gemini API error: ${response.statusText}`);
+        const data = await response.json();
+        resultJsonStr = data.candidates[0].content.parts[0].text;
+
+    } else if (settings.aiPlatform === 'claude') {
+        const apiKey = settings.claude.key;
+        const model = settings.claude.model || 'claude-3-5-sonnet-20241022';
+        if (!apiKey) throw new Error("Claude API key missing.");
+
+        const response = await fetch('https://api.anthropic.com/v1/messages', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'x-api-key': apiKey,
+                'anthropic-version': '2023-06-01'
+            },
+            body: JSON.stringify({
+                model: model,
+                max_tokens: 1024,
+                messages: [{ role: "user", content: prompt }]
+            })
+        });
+        if (!response.ok) throw new Error(`Claude API error: ${response.statusText}`);
+        const data = await response.json();
+        resultJsonStr = data.content[0].text;
+    }
+
+    try {
+        const cleanStr = resultJsonStr.replace(/^```json/i, '').replace(/```$/, '').trim();
+        let parsed = JSON.parse(cleanStr);
+        // OpenAI json_object usually requires a root key if returning an array
+        if (parsed && !Array.isArray(parsed)) {
+            const keys = Object.keys(parsed);
+            if (keys.length > 0 && Array.isArray(parsed[keys[0]])) {
+                parsed = parsed[keys[0]];
+            } else {
+                parsed = [parsed]; // fallback
+            }
+        }
+        return parsed;
+    } catch (e) {
+        console.error("Failed to parse AI Analyze response as JSON", resultJsonStr);
+        throw new Error("AI returned invalid JSON format.");
     }
 }
 

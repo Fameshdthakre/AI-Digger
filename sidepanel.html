@@ -115,7 +115,20 @@
             </div>
 
             <div class="card">
-                <label>Data Fields to Extract</label>
+                <label style="color: var(--primary);">Pre-Extraction Actions (Optional)</label>
+                <div style="font-size: 11px; color: var(--text-muted); margin-bottom: 8px;">Run clicks or type text before scraping (e.g. close cookie banners).</div>
+                <div id="actions-container"></div>
+                <button id="add-action" class="btn btn-outline mt-2" style="font-size: 12px; padding: 6px;">+ Add Action</button>
+            </div>
+
+            <div class="card">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+                    <label style="margin: 0;">Data Fields to Extract</label>
+                    <div style="display: flex; gap: 8px;">
+                        <button id="btn-auto-detect" class="btn btn-primary" style="width: auto; padding: 6px 12px; font-size: 11px; background-color: #8b5cf6; border-color: #8b5cf6;">✨ Auto-Detect Data</button>
+                        <button id="btn-ai-analyze" class="btn btn-outline" style="width: auto; padding: 6px 12px; font-size: 11px; border-color: #eab308; color: #ca8a04;">🤖 AI Analysis</button>
+                    </div>
+                </div>
                 <div id="fields-container">
                     <!-- Fields injected here via JS -->
                 </div>

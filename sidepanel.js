@@ -50,7 +50,7 @@ document.getElementById('inspect-next-btn').addEventListener('click', async () =
 const fieldsContainer = document.getElementById('fields-container');
 let fieldCount = 0;
 
-function addFieldRow(name = '', selector = '', type = 'css', extractType = 'text', attrName = '') {
+function addFieldRow(name = '', selector = '', type = 'css', extractType = 'text', attrName = '', format = 'raw') {
     fieldCount++;
     const fieldId = `field_${Date.now()}_${fieldCount}`; // Unique ID for inspector mapping
     const div = document.createElement('div');
@@ -72,6 +72,13 @@ function addFieldRow(name = '', selector = '', type = 'css', extractType = 'text
                 <option value="attribute" ${extractType === 'attribute' ? 'selected' : ''}>Custom Attribute</option>
             </select>
             <input type="text" class="f-attr-name" placeholder="attr name" value="${attrName}" style="width: 80px; ${extractType === 'attribute' ? '' : 'display: none;'}" />
+            <select class="f-format" style="width: 110px;">
+                <option value="raw" ${format === 'raw' ? 'selected' : ''}>Raw Data</option>
+                <option value="numbers" ${format === 'numbers' ? 'selected' : ''}>Numbers Only</option>
+                <option value="letters" ${format === 'letters' ? 'selected' : ''}>Letters Only</option>
+                <option value="email" ${format === 'email' ? 'selected' : ''}>Extract Email</option>
+                <option value="trim" ${format === 'trim' ? 'selected' : ''}>Trim Whitespace</option>
+            </select>
             <button class="remove-field" title="Remove Field">🗑️</button>
         </div>
         <div class="field-row-bottom">
@@ -162,7 +169,8 @@ function addFieldRow(name = '', selector = '', type = 'css', extractType = 'text
             type: typeSelect.value,
             extractType: targetSelect.value,
             attributeName: attrInput.value,
-            multiple: div.querySelector('.f-multiple').checked
+            multiple: div.querySelector('.f-multiple').checked,
+            format: div.querySelector('.f-format') ? div.querySelector('.f-format').value : 'raw'
         };
 
         const [tab] = await chrome.tabs.query({active: true, currentWindow: true});
@@ -188,7 +196,148 @@ function addFieldRow(name = '', selector = '', type = 'css', extractType = 'text
     fieldsContainer.appendChild(div);
 }
 
+// === Pre-Extraction Actions Logic ===
+const actionsContainer = document.getElementById('actions-container');
+let actionCount = 0;
+
+function addActionRow(type = 'click', selector = '', text = '') {
+    actionCount++;
+    const actionId = `action_${Date.now()}_${actionCount}`;
+    const div = document.createElement('div');
+    div.className = 'field-row';
+    div.id = actionId;
+    div.style.padding = '8px';
+    div.innerHTML = `
+        <div style="display: flex; gap: 8px; align-items: center;">
+            <select class="a-type" style="width: 100px;">
+                <option value="click" ${type === 'click' ? 'selected' : ''}>Click</option>
+                <option value="type" ${type === 'type' ? 'selected' : ''}>Type Text</option>
+                <option value="wait" ${type === 'wait' ? 'selected' : ''}>Wait For</option>
+            </select>
+            <button class="inspect-btn a-inspect" title="Inspect Selector">🔍</button>
+            <input type="text" placeholder="CSS or XPath Selector" class="a-selector" value="${selector}" style="flex: 1;" />
+            <input type="text" placeholder="Text to type" class="a-text" value="${text}" style="width: 120px; ${type === 'type' ? '' : 'display: none;'}" />
+            <button class="remove-field" style="position: static;" title="Remove Action">🗑️</button>
+        </div>
+    `;
+
+    div.querySelector('.remove-field').addEventListener('click', () => div.remove());
+
+    const typeSelect = div.querySelector('.a-type');
+    const textInput = div.querySelector('.a-text');
+    const inspectBtn = div.querySelector('.a-inspect');
+
+    typeSelect.addEventListener('change', (e) => {
+        textInput.style.display = e.target.value === 'type' ? 'block' : 'none';
+    });
+
+    inspectBtn.addEventListener('click', async () => {
+        const [tab] = await chrome.tabs.query({active: true, currentWindow: true});
+        await chrome.scripting.executeScript({
+            target: { tabId: tab.id },
+            files: ['content.js']
+        }).catch(err => console.error(err));
+
+        chrome.tabs.sendMessage(tab.id, { action: 'START_INSPECTOR_FOR_FIELD', fieldId: actionId, mode: 'css' }, (response) => {
+            if (response && response.status === 'inspector_started') {
+                inspectBtn.style.backgroundColor = '#e0f2fe';
+                inspectBtn.style.borderColor = '#3b82f6';
+                inspectBtn.innerText = '🎯';
+            }
+        });
+    });
+
+    actionsContainer.appendChild(div);
+}
+
+document.getElementById('add-action').addEventListener('click', () => addActionRow());
+
+// Adjust inspector listener to handle action row specific mapping
+const originalInspectorListener = chrome.runtime.onMessage.hasListeners() ? null : null; // Hacky check if we need to modify it. We will modify the main listener.
+
 document.getElementById('add-field').addEventListener('click', () => addFieldRow());
+
+// Auto-Detect Logic
+document.getElementById('btn-auto-detect').addEventListener('click', async () => {
+    const btn = document.getElementById('btn-auto-detect');
+    btn.innerText = 'Scanning...';
+    btn.disabled = true;
+
+    const [tab] = await chrome.tabs.query({active: true, currentWindow: true});
+    await chrome.scripting.executeScript({
+        target: { tabId: tab.id },
+        files: ['content.js']
+    }).catch(err => console.error(err));
+
+    chrome.tabs.sendMessage(tab.id, { action: 'START_AUTO_DETECT' }, (response) => {
+        if (!response || response.status !== 'started') {
+            btn.innerText = '✨ Auto-Detect Data';
+            btn.disabled = false;
+        }
+    });
+});
+
+chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+    if (message.action === 'AUTO_DETECT_RESULT') {
+        const btn = document.getElementById('btn-auto-detect');
+        btn.innerText = '✨ Auto-Detect Data';
+        btn.disabled = false;
+
+        if (message.fields && message.fields.length > 0) {
+            fieldsContainer.innerHTML = '';
+            fieldCount = 0;
+            message.fields.forEach(f => {
+                addFieldRow(f.name, f.selector, 'css', f.extractType || 'text');
+                const newRow = fieldsContainer.lastElementChild;
+                const cb = newRow.querySelector('.f-multiple');
+                if (cb) cb.checked = true; // Auto-detect implies arrays
+            });
+        }
+        sendResponse({ status: 'received' });
+    } else if (message.action === 'AI_ANALYZE_RESULT') {
+        const btn = document.getElementById('btn-ai-analyze');
+        btn.innerText = '🤖 AI Analysis';
+        btn.disabled = false;
+
+        if (message.error) {
+            alert(`AI Analysis failed: ${message.error}`);
+        } else if (message.fields && message.fields.length > 0) {
+            fieldsContainer.innerHTML = '';
+            fieldCount = 0;
+            message.fields.forEach(f => {
+                addFieldRow(f.name, f.selector, f.type || 'css', f.extractType || 'text', f.attributeName || '', f.format || 'raw');
+                const newRow = fieldsContainer.lastElementChild;
+                const cb = newRow.querySelector('.f-multiple');
+                if (cb) cb.checked = f.multiple || false;
+            });
+        }
+        sendResponse({ status: 'received' });
+    }
+    return true;
+});
+
+// AI Analyze Logic
+document.getElementById('btn-ai-analyze').addEventListener('click', async () => {
+    const btn = document.getElementById('btn-ai-analyze');
+    btn.innerText = 'Analyzing...';
+    btn.disabled = true;
+
+    const [tab] = await chrome.tabs.query({active: true, currentWindow: true});
+    await chrome.scripting.executeScript({
+        target: { tabId: tab.id },
+        files: ['content.js']
+    }).catch(err => console.error(err));
+
+    chrome.tabs.sendMessage(tab.id, { action: 'GET_PAGE_TEXT' }, (response) => {
+        if (response && response.text) {
+            chrome.runtime.sendMessage({ action: 'ANALYZE_PAGE_AI', text: response.text });
+        } else {
+            btn.innerText = '🤖 AI Analysis';
+            btn.disabled = false;
+            alert("Could not extract text from page to analyze.");
+        }
+    });
+});
 
 // Initialize Default Fields
 function loadDefaultFields() {
@@ -226,13 +375,19 @@ function getBlueprintFromUI() {
         jobName: document.getElementById('job-name').value,
         scrapingType: document.getElementById('scrape-mode').value,
         urls: document.getElementById('url-list').value,
-        fields: Array.from(document.querySelectorAll('.field-row')).map(row => ({
+        actions: Array.from(document.getElementById('actions-container').querySelectorAll('.field-row')).map(row => ({
+            type: row.querySelector('.a-type').value,
+            selector: row.querySelector('.a-selector').value,
+            text: row.querySelector('.a-text').value
+        })).filter(a => a.selector),
+        fields: Array.from(document.getElementById('fields-container').querySelectorAll('.field-row')).map(row => ({
             name: row.querySelector('.f-name').value,
             selector: row.querySelector('.f-selector').value,
             type: row.querySelector('.f-type').value,
             extractType: row.querySelector('.f-extract-target').value,
             attributeName: row.querySelector('.f-attr-name').value,
-            multiple: row.querySelector('.f-multiple') ? row.querySelector('.f-multiple').checked : false
+            multiple: row.querySelector('.f-multiple') ? row.querySelector('.f-multiple').checked : false,
+            format: row.querySelector('.f-format') ? row.querySelector('.f-format').value : 'raw'
         })).filter(f => f.name && f.selector),
         antiBot: {
             minDelayMs: parseInt(document.getElementById('min-delay').value),
@@ -292,12 +447,21 @@ document.getElementById('btn-load-job').addEventListener('click', () => {
         document.getElementById('max-scrolls').value = blueprint.singlePageOptions.maxScrolls || 5;
     }
 
+    // Set Actions
+    actionsContainer.innerHTML = '';
+    actionCount = 0;
+    if (blueprint.actions && blueprint.actions.length > 0) {
+        blueprint.actions.forEach(a => {
+            addActionRow(a.type, a.selector, a.text);
+        });
+    }
+
     // Set Fields
     fieldsContainer.innerHTML = '';
     fieldCount = 0;
     if (blueprint.fields && blueprint.fields.length > 0) {
         blueprint.fields.forEach(f => {
-            addFieldRow(f.name, f.selector, f.type, f.extractType, f.attributeName);
+            addFieldRow(f.name, f.selector, f.type, f.extractType, f.attributeName, f.format || 'raw');
             // Need to set the multiple checkbox manually as addFieldRow doesn't accept it
             const newRow = fieldsContainer.lastElementChild;
             const cb = newRow.querySelector('.f-multiple');
@@ -398,6 +562,18 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
                 inspectBtn.style.backgroundColor = 'var(--surface)';
                 inspectBtn.style.borderColor = 'var(--border)';
                 inspectBtn.innerText = '🔍';
+            }
+        } else if (fieldId.startsWith('action_')) {
+            const actionRow = document.getElementById(fieldId);
+            if (actionRow) {
+                const selectorInput = actionRow.querySelector('.a-selector');
+                if (selectorInput) selectorInput.value = selector;
+                const inspectBtn = actionRow.querySelector('.a-inspect');
+                if (inspectBtn) {
+                    inspectBtn.style.backgroundColor = 'var(--surface)';
+                    inspectBtn.style.borderColor = 'var(--border)';
+                    inspectBtn.innerText = '🔍';
+                }
             }
         } else {
             const fieldRow = document.getElementById(fieldId);

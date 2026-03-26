@@ -32,6 +32,16 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         window.scrollBy(0, window.innerHeight);
         sendResponse({ status: 'scrolled' });
     }
+    else if (message.action === 'START_AUTO_DETECT') {
+        startAutoDetect();
+        sendResponse({ status: 'started' });
+    }
+    else if (message.action === 'WAIT_FOR_ELEMENT') {
+        waitForElement(message.selector, 15000).then(found => {
+            sendResponse({ status: found ? 'found' : 'timeout' });
+        });
+        return true; // async
+    }
     else if (message.action === 'CLICK_NEXT') {
         const selector = message.selector;
         let el = null;
@@ -55,8 +65,50 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         const result = extractFieldData(message.field);
         sendResponse({ result: result });
     }
+    else if (message.action === 'GET_PAGE_TEXT') {
+        sendResponse({ text: document.body.innerText.trim() });
+    }
+    else if (message.action === 'EXECUTE_ACTION') {
+        executeAction(message.actionData).then(result => {
+            sendResponse({ status: result ? 'success' : 'failed' });
+        });
+        return true;
+    }
     return true;
 });
+
+async function executeAction(actionData) {
+    const { type, selector, text } = actionData;
+
+    if (type === 'wait') {
+        return await waitForElement(selector, 15000);
+    }
+
+    // For click and type, find element
+    let el = null;
+    try {
+        if (selector.startsWith('//') || selector.startsWith('(')) {
+            el = document.evaluate(selector, document, null, XPathResult.FIRST_ORDERED_NODE_TYPE, null).singleNodeValue;
+        } else {
+            el = document.querySelector(selector);
+        }
+    } catch(e) {}
+
+    if (!el) return false;
+
+    if (type === 'click') {
+        el.click();
+        return true;
+    } else if (type === 'type') {
+        el.value = text;
+        // Dispatch events to trigger framework updates (React/Vue/Angular)
+        el.dispatchEvent(new Event('input', { bubbles: true }));
+        el.dispatchEvent(new Event('change', { bubbles: true }));
+        return true;
+    }
+
+    return false;
+}
 
 // ==========================================
 // PHASE 1: VISUAL INSPECTOR LOGIC
@@ -157,6 +209,188 @@ function generateCssSelector(el) {
 }
 
 // Generates a robust XPath
+let autoDetectActive = false;
+
+function startAutoDetect() {
+    if (overlayBox) overlayBox.remove();
+
+    autoDetectActive = true;
+    document.body.style.cursor = 'crosshair';
+
+    overlayBox = document.createElement('div');
+    overlayBox.style.position = 'fixed';
+    overlayBox.style.pointerEvents = 'none';
+    overlayBox.style.zIndex = '999999';
+    overlayBox.style.border = '3px dashed #8b5cf6';
+    overlayBox.style.backgroundColor = 'rgba(139, 92, 246, 0.1)';
+    overlayBox.style.transition = 'all 0.1s ease';
+    document.body.appendChild(overlayBox);
+
+    document.addEventListener('mouseover', handleAutoDetectMouseOver, true);
+    document.addEventListener('click', handleAutoDetectClick, true);
+
+    // Create UI helper prompt
+    createAutoDetectUIPanel();
+}
+
+function stopAutoDetect() {
+    autoDetectActive = false;
+    document.body.style.cursor = 'default';
+    if (overlayBox) overlayBox.remove();
+    const ui = document.getElementById('ai-digger-auto-ui');
+    if (ui) ui.remove();
+    document.removeEventListener('mouseover', handleAutoDetectMouseOver, true);
+    document.removeEventListener('click', handleAutoDetectClick, true);
+}
+
+function handleAutoDetectMouseOver(e) {
+    if (!autoDetectActive) return;
+    const ui = document.getElementById('ai-digger-auto-ui');
+    if (ui && ui.contains(e.target)) return;
+
+    hoveredElement = e.target;
+
+    // Find closest container that has repeating children (like ul, grid, table, etc)
+    const rect = hoveredElement.getBoundingClientRect();
+    overlayBox.style.top = rect.top + 'px';
+    overlayBox.style.left = rect.left + 'px';
+    overlayBox.style.width = rect.width + 'px';
+    overlayBox.style.height = rect.height + 'px';
+}
+
+function handleAutoDetectClick(e) {
+    if (!autoDetectActive) return;
+    const ui = document.getElementById('ai-digger-auto-ui');
+    if (ui && ui.contains(e.target)) return;
+
+    e.preventDefault();
+    e.stopPropagation();
+
+    // Highlight
+    overlayBox.style.backgroundColor = 'rgba(34, 197, 94, 0.4)';
+    overlayBox.style.border = '3px solid #22c55e';
+
+    // Simple heuristic: walk up the DOM to find a repeating container
+    let itemContainer = hoveredElement;
+    let parent = itemContainer.parentNode;
+    while (parent && parent !== document.body) {
+        if (parent.children.length > 2 && parent.children[0].tagName === parent.children[1].tagName) {
+            itemContainer = parent.children[0]; // Take the first child as the template
+            break;
+        }
+        parent = parent.parentNode;
+    }
+
+    const fields = analyzeContainerForFields(itemContainer);
+
+    chrome.runtime.sendMessage({ action: 'AUTO_DETECT_RESULT', fields: fields });
+
+    setTimeout(() => {
+        stopAutoDetect();
+    }, 300);
+}
+
+function analyzeContainerForFields(container) {
+    const fields = [];
+    let fieldCounter = 1;
+
+    // Root container class
+    const containerClasses = Array.from(container.classList).join('.');
+    const baseSelector = container.tagName.toLowerCase() + (containerClasses ? '.' + containerClasses : '');
+
+    // Look for links
+    const links = container.querySelectorAll('a');
+    if (links.length > 0) {
+        fields.push({
+            name: "Link URL",
+            selector: baseSelector + ' a',
+            extractType: 'href'
+        });
+
+        if (links[0].innerText.trim()) {
+            fields.push({
+                name: "Link Text",
+                selector: baseSelector + ' a',
+                extractType: 'text'
+            });
+        }
+    }
+
+    // Look for images
+    const images = container.querySelectorAll('img');
+    if (images.length > 0) {
+        fields.push({
+            name: "Image Source",
+            selector: baseSelector + ' img',
+            extractType: 'src'
+        });
+    }
+
+    // Look for headings (Titles)
+    const headings = container.querySelectorAll('h1, h2, h3, h4, h5');
+    if (headings.length > 0) {
+        fields.push({
+            name: "Title",
+            selector: baseSelector + ' ' + headings[0].tagName.toLowerCase(),
+            extractType: 'text'
+        });
+    }
+
+    // Look for spans/divs with text (prices, descriptions)
+    const textNodes = container.querySelectorAll('span, div, p');
+    textNodes.forEach(node => {
+        const text = node.innerText.trim();
+        if (text && text.length > 0 && text.length < 100) {
+            if (text.match(/^[\$€£]?\s*\d+[.,]?\d*\s*$/) || Array.from(node.classList).some(c => c.toLowerCase().includes('price') || c.toLowerCase().includes('title'))) {
+                const nodeClass = Array.from(node.classList).join('.');
+                if (nodeClass) {
+                    const sel = baseSelector + ' ' + node.tagName.toLowerCase() + '.' + nodeClass;
+                    if (!fields.some(f => f.selector === sel)) {
+                        fields.push({
+                            name: `Data ${fieldCounter++}`,
+                            selector: sel,
+                            extractType: 'text'
+                        });
+                    }
+                }
+            }
+        }
+    });
+
+    if (fields.length === 0) {
+        fields.push({
+            name: "Item Text",
+            selector: baseSelector,
+            extractType: 'text'
+        });
+    }
+
+    return fields;
+}
+
+function createAutoDetectUIPanel() {
+    const ui = document.createElement('div');
+    ui.id = 'ai-digger-auto-ui';
+    ui.style.position = 'fixed';
+    ui.style.bottom = '20px';
+    ui.style.right = '20px';
+    ui.style.zIndex = '1000000';
+    ui.style.background = '#8b5cf6';
+    ui.style.color = 'white';
+    ui.style.padding = '12px 20px';
+    ui.style.borderRadius = '8px';
+    ui.style.fontFamily = 'sans-serif';
+    ui.style.boxShadow = '0 10px 25px rgba(0,0,0,0.2)';
+    ui.innerHTML = `
+        <div style="font-weight: bold; margin-bottom: 4px;">✨ Auto-Detect Mode</div>
+        <div style="font-size: 12px; margin-bottom: 8px;">Click on a repeating item (like a product card or list row) to auto-generate selectors.</div>
+        <button id="ai-digger-cancel-auto" style="background: white; color: #8b5cf6; border: none; padding: 6px 12px; border-radius: 4px; cursor: pointer; font-weight: bold; font-size: 12px;">Cancel</button>
+    `;
+    document.body.appendChild(ui);
+    document.getElementById('ai-digger-cancel-auto').addEventListener('click', stopAutoDetect);
+}
+
+// Generates a robust XPath
 function generateXPath(el) {
     if (el.id !== '') {
         return '//*[@id="' + el.id + '"]';
@@ -183,6 +417,63 @@ function generateXPath(el) {
 // PHASE 3/4: EXTRACTION ENGINE
 // ==========================================
 
+function formatValue(val, formatType) {
+    if (!val || typeof val !== 'string') return val;
+
+    switch (formatType) {
+        case 'numbers':
+            return val.replace(/[^0-9.]/g, '');
+        case 'letters':
+            return val.replace(/[^a-zA-Z\s]/g, '').trim();
+        case 'email':
+            const match = val.match(/([a-zA-Z0-9._-]+@[a-zA-Z0-9._-]+\.[a-zA-Z0-9_-]+)/);
+            return match ? match[1] : '';
+        case 'trim':
+            return val.replace(/\s+/g, ' ').trim();
+        case 'raw':
+        default:
+            return val;
+    }
+}
+
+function waitForElement(selector, timeoutMs = 15000) {
+    return new Promise((resolve) => {
+        let el = null;
+        try {
+            if (selector.startsWith('//') || selector.startsWith('(')) {
+                el = document.evaluate(selector, document, null, XPathResult.FIRST_ORDERED_NODE_TYPE, null).singleNodeValue;
+            } else {
+                el = document.querySelector(selector);
+            }
+        } catch(e) {}
+
+        if (el) return resolve(true);
+
+        const observer = new MutationObserver(() => {
+            let found = null;
+            try {
+                if (selector.startsWith('//') || selector.startsWith('(')) {
+                    found = document.evaluate(selector, document, null, XPathResult.FIRST_ORDERED_NODE_TYPE, null).singleNodeValue;
+                } else {
+                    found = document.querySelector(selector);
+                }
+            } catch(e) {}
+
+            if (found) {
+                observer.disconnect();
+                resolve(true);
+            }
+        });
+
+        observer.observe(document.body, { childList: true, subtree: true });
+
+        setTimeout(() => {
+            observer.disconnect();
+            resolve(false);
+        }, timeoutMs);
+    });
+}
+
 function extractFieldData(field) {
     if (field.type === 'ai') return null; // AI handled in background
 
@@ -204,17 +495,19 @@ function extractFieldData(field) {
 
         // Define extraction helper function
         const extractValue = (el) => {
+            let val = "";
             if (field.extractType === 'text') {
-                return el.innerText ? el.innerText.trim() : "";
+                val = el.innerText ? el.innerText.trim() : "";
             } else if (field.extractType === 'html') {
-                return el.innerHTML;
+                val = el.innerHTML;
             } else if (field.extractType === 'href' || field.extractType === 'src') {
-                return el.getAttribute(field.extractType);
+                val = el.getAttribute(field.extractType) || "";
             } else if (field.extractType === 'attribute' && field.attributeName) {
-                return el.getAttribute(field.attributeName);
+                val = el.getAttribute(field.attributeName) || "";
             } else {
-                return el.innerText ? el.innerText.trim() : "";
+                val = el.innerText ? el.innerText.trim() : "";
             }
+            return formatValue(val, field.format);
         };
 
         if (field.multiple) {
