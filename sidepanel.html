@@ -42,6 +42,9 @@
         .remove-field:hover { background: #fee2e2; border-color: #fca5a5; }
         .inspect-btn { background: var(--surface); border: 1px solid var(--border); cursor: pointer; padding: 6px 10px; border-radius: 4px; font-size: 14px; display: flex; align-items: center; justify-content: center; }
         .inspect-btn:hover { border-color: var(--primary); color: var(--primary); }
+        .test-btn { background: var(--surface); border: 1px solid var(--border); cursor: pointer; padding: 6px 10px; border-radius: 4px; font-size: 14px; display: flex; align-items: center; justify-content: center; }
+        .test-btn:hover { border-color: #10b981; color: #10b981; }
+        .preview-box { background: #f3f4f6; border: 1px dashed var(--border); padding: 8px; border-radius: 4px; font-family: monospace; font-size: 11px; color: #374151; max-height: 80px; overflow-y: auto; white-space: pre-wrap; display: none; }
         .checkbox-label { display: flex; align-items: center; gap: 4px; font-size: 11px; font-weight: normal; cursor: pointer; color: var(--text-muted); }
         .checkbox-label input { width: auto; margin: 0; }
         
@@ -81,6 +84,18 @@
         
         <!-- BUILD VIEW -->
         <div id="view-build" class="view active">
+            <div class="card" style="background: #eff6ff; border-color: #bfdbfe;">
+                <label style="color: var(--primary);">Saved Jobs</label>
+                <div class="flex mt-2" style="align-items: center;">
+                    <select id="saved-jobs-select" style="flex: 1;">
+                        <option value="">-- Select a saved job --</option>
+                    </select>
+                    <button id="btn-load-job" class="btn btn-outline" style="width: auto; padding: 6px 10px; font-size: 12px; margin-left: 8px;">Load</button>
+                    <button id="btn-save-job" class="btn btn-primary" style="width: auto; padding: 6px 10px; font-size: 12px; margin-left: 8px;">Save Current</button>
+                    <button id="btn-delete-job" class="btn btn-danger" style="width: auto; padding: 6px 10px; font-size: 12px; margin-left: 8px;">Delete</button>
+                </div>
+            </div>
+
             <div class="card">
                 <div class="form-group">
                     <label>Job Name</label>

@@ -76,11 +76,13 @@ function addFieldRow(name = '', selector = '', type = 'css', extractType = 'text
         </div>
         <div class="field-row-bottom">
             <button class="inspect-btn" title="Inspect Selector" style="${type === 'ai' ? 'display: none;' : ''}">🔍</button>
+            <button class="test-btn" title="Test Selector" style="${type === 'ai' ? 'display: none;' : ''}">🧪</button>
             <input type="text" placeholder="CSS Selector, XPath, or AI Prompt" class="f-selector" value="${selector}" style="flex: 1;" />
             <label class="checkbox-label" style="width: auto; flex-shrink: 0; margin-left: auto; ${type === 'ai' ? 'display: none;' : ''}">
                 <input type="checkbox" class="f-multiple" title="Extract an Array of multiple items" /> Array
             </label>
         </div>
+        <div class="preview-box"></div>
     `;
 
     // Remove button logic
@@ -92,6 +94,8 @@ function addFieldRow(name = '', selector = '', type = 'css', extractType = 'text
     const attrInput = div.querySelector('.f-attr-name');
     const selectorInput = div.querySelector('.f-selector');
     const inspectBtn = div.querySelector('.inspect-btn');
+    const testBtn = div.querySelector('.test-btn');
+    const previewBox = div.querySelector('.preview-box');
 
     const multipleLabel = div.querySelector('.f-multiple').parentElement;
 
@@ -100,6 +104,8 @@ function addFieldRow(name = '', selector = '', type = 'css', extractType = 'text
             targetSelect.style.display = 'none';
             attrInput.style.display = 'none';
             inspectBtn.style.display = 'none';
+            testBtn.style.display = 'none';
+            previewBox.style.display = 'none';
             multipleLabel.style.display = 'none';
             selectorInput.placeholder = "e.g. What is the product price?";
         } else {
@@ -108,6 +114,7 @@ function addFieldRow(name = '', selector = '', type = 'css', extractType = 'text
                 attrInput.style.display = 'block';
             }
             inspectBtn.style.display = 'flex';
+            testBtn.style.display = 'flex';
             multipleLabel.style.display = 'flex';
             selectorInput.placeholder = e.target.value === 'xpath' ? "XPath (e.g. //h1[@class='title'])" : "CSS Selector (e.g. h1.title)";
         }
@@ -144,15 +151,176 @@ function addFieldRow(name = '', selector = '', type = 'css', extractType = 'text
         });
     });
 
+    // Test button logic
+    testBtn.addEventListener('click', async () => {
+        if (!selectorInput.value) return;
+
+        testBtn.innerText = '⏳';
+        const fieldData = {
+            name: div.querySelector('.f-name').value || 'Preview',
+            selector: selectorInput.value,
+            type: typeSelect.value,
+            extractType: targetSelect.value,
+            attributeName: attrInput.value,
+            multiple: div.querySelector('.f-multiple').checked
+        };
+
+        const [tab] = await chrome.tabs.query({active: true, currentWindow: true});
+
+        await chrome.scripting.executeScript({
+            target: { tabId: tab.id },
+            files: ['content.js']
+        }).catch(err => console.error("Failed to inject content.js:", err));
+
+        chrome.tabs.sendMessage(tab.id, { action: 'TEST_SELECTOR', field: fieldData }, (response) => {
+            testBtn.innerText = '🧪';
+            previewBox.style.display = 'block';
+            if (response && response.result !== undefined && response.result !== null) {
+                previewBox.style.color = '#374151';
+                previewBox.innerText = typeof response.result === 'object' ? JSON.stringify(response.result, null, 2) : response.result;
+            } else {
+                previewBox.style.color = '#ef4444';
+                previewBox.innerText = "No results found or error occurred.";
+            }
+        });
+    });
+
     fieldsContainer.appendChild(div);
 }
 
 document.getElementById('add-field').addEventListener('click', () => addFieldRow());
 
-// Add default fields to start
-addFieldRow('Product Name', 'h1', 'css', 'text');
-addFieldRow('Product Link', 'a.product-link', 'css', 'href');
-addFieldRow('Summary', 'Summarize the product in one sentence', 'ai');
+// Initialize Default Fields
+function loadDefaultFields() {
+    fieldsContainer.innerHTML = '';
+    fieldCount = 0;
+    addFieldRow('Product Name', 'h1', 'css', 'text');
+    addFieldRow('Product Link', 'a.product-link', 'css', 'href');
+    addFieldRow('Summary', 'Summarize the product in one sentence', 'ai');
+}
+loadDefaultFields();
+
+// === Saved Jobs Logic ===
+let savedJobs = {};
+
+function updateSavedJobsDropdown() {
+    const select = document.getElementById('saved-jobs-select');
+    select.innerHTML = '<option value="">-- Select a saved job --</option>';
+    for (const jobName in savedJobs) {
+        const option = document.createElement('option');
+        option.value = jobName;
+        option.innerText = jobName;
+        select.appendChild(option);
+    }
+}
+
+chrome.storage.local.get(['savedJobs'], (result) => {
+    if (result.savedJobs) {
+        savedJobs = result.savedJobs;
+        updateSavedJobsDropdown();
+    }
+});
+
+function getBlueprintFromUI() {
+    return {
+        jobName: document.getElementById('job-name').value,
+        scrapingType: document.getElementById('scrape-mode').value,
+        urls: document.getElementById('url-list').value,
+        fields: Array.from(document.querySelectorAll('.field-row')).map(row => ({
+            name: row.querySelector('.f-name').value,
+            selector: row.querySelector('.f-selector').value,
+            type: row.querySelector('.f-type').value,
+            extractType: row.querySelector('.f-extract-target').value,
+            attributeName: row.querySelector('.f-attr-name').value,
+            multiple: row.querySelector('.f-multiple') ? row.querySelector('.f-multiple').checked : false
+        })).filter(f => f.name && f.selector),
+        antiBot: {
+            minDelayMs: parseInt(document.getElementById('min-delay').value),
+            maxDelayMs: parseInt(document.getElementById('max-delay').value),
+            batchSize: parseInt(document.getElementById('batch-size').value),
+            batchPauseMs: parseInt(document.getElementById('batch-pause').value)
+        },
+        singlePageOptions: {
+            nextButtonSelector: document.getElementById('next-button-selector').value,
+            maxPages: parseInt(document.getElementById('max-pages').value),
+            infiniteScroll: document.getElementById('enable-infinite-scroll').checked,
+            maxScrolls: parseInt(document.getElementById('max-scrolls').value)
+        }
+    };
+}
+
+document.getElementById('btn-save-job').addEventListener('click', () => {
+    const blueprint = getBlueprintFromUI();
+    if (!blueprint.jobName) {
+        alert("Please enter a Job Name to save.");
+        return;
+    }
+    savedJobs[blueprint.jobName] = blueprint;
+    chrome.storage.local.set({ savedJobs: savedJobs }, () => {
+        updateSavedJobsDropdown();
+        document.getElementById('saved-jobs-select').value = blueprint.jobName;
+        alert(`Job "${blueprint.jobName}" saved!`);
+    });
+});
+
+document.getElementById('btn-load-job').addEventListener('click', () => {
+    const jobName = document.getElementById('saved-jobs-select').value;
+    if (!jobName || !savedJobs[jobName]) return;
+
+    const blueprint = savedJobs[jobName];
+
+    // Set Basic Info
+    document.getElementById('job-name').value = blueprint.jobName;
+    document.getElementById('scrape-mode').value = blueprint.scrapingType;
+    document.getElementById('scrape-mode').dispatchEvent(new Event('change'));
+    document.getElementById('url-list').value = blueprint.urls || '';
+
+    // Set Anti-Bot
+    if (blueprint.antiBot) {
+        document.getElementById('min-delay').value = blueprint.antiBot.minDelayMs || 2000;
+        document.getElementById('max-delay').value = blueprint.antiBot.maxDelayMs || 5000;
+        document.getElementById('batch-size').value = blueprint.antiBot.batchSize || 10;
+        document.getElementById('batch-pause').value = blueprint.antiBot.batchPauseMs || 10000;
+    }
+
+    // Set Single Page Options
+    if (blueprint.singlePageOptions) {
+        document.getElementById('next-button-selector').value = blueprint.singlePageOptions.nextButtonSelector || '';
+        document.getElementById('max-pages').value = blueprint.singlePageOptions.maxPages || 1;
+        document.getElementById('enable-infinite-scroll').checked = blueprint.singlePageOptions.infiniteScroll || false;
+        document.getElementById('enable-infinite-scroll').dispatchEvent(new Event('change'));
+        document.getElementById('max-scrolls').value = blueprint.singlePageOptions.maxScrolls || 5;
+    }
+
+    // Set Fields
+    fieldsContainer.innerHTML = '';
+    fieldCount = 0;
+    if (blueprint.fields && blueprint.fields.length > 0) {
+        blueprint.fields.forEach(f => {
+            addFieldRow(f.name, f.selector, f.type, f.extractType, f.attributeName);
+            // Need to set the multiple checkbox manually as addFieldRow doesn't accept it
+            const newRow = fieldsContainer.lastElementChild;
+            const cb = newRow.querySelector('.f-multiple');
+            if (cb) cb.checked = f.multiple || false;
+        });
+    } else {
+        loadDefaultFields();
+    }
+});
+
+document.getElementById('btn-delete-job').addEventListener('click', () => {
+    const jobName = document.getElementById('saved-jobs-select').value;
+    if (!jobName || !savedJobs[jobName]) return;
+
+    if (confirm(`Are you sure you want to delete the saved job "${jobName}"?`)) {
+        delete savedJobs[jobName];
+        chrome.storage.local.set({ savedJobs: savedJobs }, () => {
+            updateSavedJobsDropdown();
+            alert("Job deleted.");
+        });
+    }
+});
+
 
 // === AI Settings Logic ===
 
@@ -239,31 +407,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
 
 // 2. Start Job
 document.getElementById('btn-start').addEventListener('click', () => {
-    const blueprint = {
-        jobName: document.getElementById('job-name').value,
-        scrapingType: document.getElementById('scrape-mode').value,
-        urls: document.getElementById('url-list').value,
-        fields: Array.from(document.querySelectorAll('.field-row')).map(row => ({
-            name: row.querySelector('.f-name').value,
-            selector: row.querySelector('.f-selector').value,
-            type: row.querySelector('.f-type').value, // 'css', 'xpath', 'ai'
-            extractType: row.querySelector('.f-extract-target').value, // 'text', 'html', 'href', 'src', 'attribute'
-            attributeName: row.querySelector('.f-attr-name').value,
-            multiple: row.querySelector('.f-multiple') ? row.querySelector('.f-multiple').checked : false
-        })).filter(f => f.name && f.selector),
-        antiBot: {
-            minDelayMs: parseInt(document.getElementById('min-delay').value),
-            maxDelayMs: parseInt(document.getElementById('max-delay').value),
-            batchSize: parseInt(document.getElementById('batch-size').value),
-            batchPauseMs: parseInt(document.getElementById('batch-pause').value)
-        },
-        singlePageOptions: {
-            nextButtonSelector: document.getElementById('next-button-selector').value,
-            maxPages: parseInt(document.getElementById('max-pages').value),
-            infiniteScroll: document.getElementById('enable-infinite-scroll').checked,
-            maxScrolls: parseInt(document.getElementById('max-scrolls').value)
-        }
-    };
+    const blueprint = getBlueprintFromUI();
 
     chrome.runtime.sendMessage({ action: 'START_JOB', blueprint }, () => {
         // Switch to run tab

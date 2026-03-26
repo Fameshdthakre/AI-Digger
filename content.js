@@ -51,6 +51,10 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
             sendResponse({ status: 'not_found' });
         }
     }
+    else if (message.action === 'TEST_SELECTOR') {
+        const result = extractFieldData(message.field);
+        sendResponse({ result: result });
+    }
     return true;
 });
 
@@ -179,6 +183,52 @@ function generateXPath(el) {
 // PHASE 3/4: EXTRACTION ENGINE
 // ==========================================
 
+function extractFieldData(field) {
+    if (field.type === 'ai') return null; // AI handled in background
+
+    try {
+        let elements = [];
+
+        if (field.type === 'xpath') {
+            const xpathResult = document.evaluate(field.selector, document, null, XPathResult.ORDERED_NODE_SNAPSHOT_TYPE, null);
+            for (let i = 0; i < xpathResult.snapshotLength; i++) {
+                elements.push(xpathResult.snapshotItem(i));
+            }
+        } else {
+            elements = Array.from(document.querySelectorAll(field.selector));
+        }
+
+        if (elements.length === 0) {
+            return field.multiple ? [] : null;
+        }
+
+        // Define extraction helper function
+        const extractValue = (el) => {
+            if (field.extractType === 'text') {
+                return el.innerText ? el.innerText.trim() : "";
+            } else if (field.extractType === 'html') {
+                return el.innerHTML;
+            } else if (field.extractType === 'href' || field.extractType === 'src') {
+                return el.getAttribute(field.extractType);
+            } else if (field.extractType === 'attribute' && field.attributeName) {
+                return el.getAttribute(field.attributeName);
+            } else {
+                return el.innerText ? el.innerText.trim() : "";
+            }
+        };
+
+        if (field.multiple) {
+            return elements.map(extractValue);
+        } else {
+            return extractValue(elements[0]);
+        }
+
+    } catch (e) {
+        console.error(`Error extracting field ${field.name}:`, e);
+        return "ERROR";
+    }
+}
+
 function executeExtraction(blueprint) {
     const result = {};
     result['URL'] = window.location.href;
@@ -189,51 +239,9 @@ function executeExtraction(blueprint) {
     blueprint.fields.forEach(field => {
         if (field.type === 'ai') {
             needsAi = true;
-            return; // Skip AI fields here, handled in background
+            return;
         }
-
-        try {
-            let elements = [];
-
-            if (field.type === 'xpath') {
-                const xpathResult = document.evaluate(field.selector, document, null, XPathResult.ORDERED_NODE_SNAPSHOT_TYPE, null);
-                for (let i = 0; i < xpathResult.snapshotLength; i++) {
-                    elements.push(xpathResult.snapshotItem(i));
-                }
-            } else {
-                elements = Array.from(document.querySelectorAll(field.selector));
-            }
-
-            if (elements.length === 0) {
-                result[field.name] = field.multiple ? [] : null;
-                return;
-            }
-
-            // Define extraction helper function
-            const extractValue = (el) => {
-                if (field.extractType === 'text') {
-                    return el.innerText ? el.innerText.trim() : "";
-                } else if (field.extractType === 'html') {
-                    return el.innerHTML;
-                } else if (field.extractType === 'href' || field.extractType === 'src') {
-                    return el.getAttribute(field.extractType);
-                } else if (field.extractType === 'attribute' && field.attributeName) {
-                    return el.getAttribute(field.attributeName);
-                } else {
-                    return el.innerText ? el.innerText.trim() : "";
-                }
-            };
-
-            if (field.multiple) {
-                result[field.name] = elements.map(extractValue);
-            } else {
-                result[field.name] = extractValue(elements[0]);
-            }
-
-        } catch (e) {
-            console.error(`Error extracting field ${field.name}:`, e);
-            result[field.name] = "ERROR";
-        }
+        result[field.name] = extractFieldData(field);
     });
 
     if (needsAi) {
