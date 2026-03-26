@@ -35,13 +35,15 @@
         .btn-outline:hover { background: var(--bg); }
         .btn-danger { background: #fee2e2; color: var(--danger); }
         
-        .field-row { display: flex; flex-direction: column; gap: 8px; margin-bottom: 12px; padding: 12px; background: #f9fafb; border: 1px solid var(--border); border-radius: 6px; position: relative; }
+        .field-row { display: flex; flex-direction: column; gap: 8px; margin-bottom: 12px; padding: 12px; background: #f9fafb; border: 1px solid var(--border); border-radius: 6px; }
         .field-row input, .field-row select { margin-bottom: 0; }
         .field-row-top, .field-row-bottom { display: flex; gap: 8px; align-items: center; }
-        .remove-field { position: absolute; top: 4px; right: 4px; background: none; border: none; color: var(--danger); cursor: pointer; font-size: 14px; padding: 4px; border-radius: 4px;}
-        .remove-field:hover { background: #fee2e2; }
+        .remove-field { background: var(--surface); border: 1px solid var(--border); color: var(--danger); cursor: pointer; font-size: 14px; padding: 6px; border-radius: 4px; display: flex; align-items: center; justify-content: center;}
+        .remove-field:hover { background: #fee2e2; border-color: #fca5a5; }
         .inspect-btn { background: var(--surface); border: 1px solid var(--border); cursor: pointer; padding: 6px 10px; border-radius: 4px; font-size: 14px; display: flex; align-items: center; justify-content: center; }
         .inspect-btn:hover { border-color: var(--primary); color: var(--primary); }
+        .checkbox-label { display: flex; align-items: center; gap: 4px; font-size: 11px; font-weight: normal; cursor: pointer; color: var(--text-muted); }
+        .checkbox-label input { width: auto; margin: 0; }
         
         /* Settings UI */
         .password-group { display: flex; align-items: stretch; margin-bottom: 12px; }
@@ -105,6 +107,35 @@
                 <button id="add-field" class="btn btn-outline mt-2" style="font-size: 12px; padding: 6px;">+ Add Data Field</button>
             </div>
 
+            <div class="card" id="single-page-settings">
+                <label style="color: var(--primary);">Single Page Advanced Logic</label>
+
+                <div class="flex mt-2" style="align-items: flex-end;">
+                    <div style="flex: 2;">
+                        <label>Pagination 'Next' Button</label>
+                        <div style="display: flex; gap: 8px;">
+                            <button class="inspect-btn" id="inspect-next-btn" title="Inspect Next Button" style="flex-shrink: 0;">🔍</button>
+                            <input type="text" id="next-button-selector" placeholder="CSS or XPath for Next button" />
+                        </div>
+                    </div>
+                    <div style="flex: 1;">
+                        <label>Max Pages</label>
+                        <input type="number" id="max-pages" value="1" min="1" />
+                    </div>
+                </div>
+
+                <div class="flex mt-2" style="align-items: center;">
+                    <label class="checkbox-label" style="font-size: 12px; font-weight: 600; color: var(--text-main);">
+                        <input type="checkbox" id="enable-infinite-scroll" />
+                        Infinite Scroll Page First
+                    </label>
+                    <div style="margin-left: auto; width: 120px;" id="scrolls-container" style="display: none;">
+                        <label>Max Scrolls</label>
+                        <input type="number" id="max-scrolls" value="5" min="1" />
+                    </div>
+                </div>
+            </div>
+
             <div class="card">
                 <label>Anti-Bot Settings (Delays)</label>
                 <div class="flex mt-2">
@@ -117,7 +148,7 @@
                         <input type="number" id="max-delay" value="5000" />
                     </div>
                 </div>
-                <div class="flex mt-2">
+                <div class="flex mt-2" id="batch-settings-group" style="display: none;">
                     <div class="flex-1">
                         <label>Batch Size</label>
                         <input type="number" id="batch-size" value="10" placeholder="0 to disable" />

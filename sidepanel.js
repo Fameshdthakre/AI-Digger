@@ -11,9 +11,39 @@ document.querySelectorAll('.tab').forEach(tab => {
     });
 });
 
-// Toggle URL list visibility based on mode
+// Toggle visibility based on mode
 document.getElementById('scrape-mode').addEventListener('change', (e) => {
-    document.getElementById('url-list-group').style.display = e.target.value === 'multi-url' ? 'block' : 'none';
+    const isMulti = e.target.value === 'multi-url';
+    document.getElementById('url-list-group').style.display = isMulti ? 'block' : 'none';
+    document.getElementById('batch-settings-group').style.display = isMulti ? 'flex' : 'none';
+    document.getElementById('single-page-settings').style.display = isMulti ? 'none' : 'block';
+});
+
+// Toggle scrolls input visibility
+const enableScrolls = document.getElementById('enable-infinite-scroll');
+const scrollsContainer = document.getElementById('scrolls-container');
+enableScrolls.addEventListener('change', (e) => {
+    scrollsContainer.style.display = e.target.checked ? 'block' : 'none';
+});
+
+// Inspect Next Button
+document.getElementById('inspect-next-btn').addEventListener('click', async () => {
+    const [tab] = await chrome.tabs.query({active: true, currentWindow: true});
+
+    // Inject script programmatically if it's not already there
+    await chrome.scripting.executeScript({
+        target: { tabId: tab.id },
+        files: ['content.js']
+    }).catch(err => console.error("Failed to inject content.js:", err));
+
+    chrome.tabs.sendMessage(tab.id, { action: 'START_INSPECTOR_FOR_FIELD', fieldId: 'next-button-selector', mode: 'css' }, (response) => {
+        if (response && response.status === 'inspector_started') {
+            const btn = document.getElementById('inspect-next-btn');
+            btn.style.backgroundColor = '#e0f2fe';
+            btn.style.borderColor = '#3b82f6';
+            btn.innerText = '🎯';
+        }
+    });
 });
 
 // Dynamic Field Management
@@ -27,7 +57,6 @@ function addFieldRow(name = '', selector = '', type = 'css', extractType = 'text
     div.className = 'field-row';
     div.id = fieldId;
     div.innerHTML = `
-        <button class="remove-field" title="Remove Field">❌</button>
         <div class="field-row-top">
             <input type="text" placeholder="Field Name" class="f-name" value="${name}" style="flex: 1;" />
             <select class="f-type" style="width: 100px;">
@@ -43,10 +72,14 @@ function addFieldRow(name = '', selector = '', type = 'css', extractType = 'text
                 <option value="attribute" ${extractType === 'attribute' ? 'selected' : ''}>Custom Attribute</option>
             </select>
             <input type="text" class="f-attr-name" placeholder="attr name" value="${attrName}" style="width: 80px; ${extractType === 'attribute' ? '' : 'display: none;'}" />
+            <button class="remove-field" title="Remove Field">🗑️</button>
         </div>
         <div class="field-row-bottom">
             <button class="inspect-btn" title="Inspect Selector" style="${type === 'ai' ? 'display: none;' : ''}">🔍</button>
             <input type="text" placeholder="CSS Selector, XPath, or AI Prompt" class="f-selector" value="${selector}" style="flex: 1;" />
+            <label class="checkbox-label" style="width: auto; flex-shrink: 0; margin-left: auto; ${type === 'ai' ? 'display: none;' : ''}">
+                <input type="checkbox" class="f-multiple" title="Extract an Array of multiple items" /> Array
+            </label>
         </div>
     `;
 
@@ -60,11 +93,14 @@ function addFieldRow(name = '', selector = '', type = 'css', extractType = 'text
     const selectorInput = div.querySelector('.f-selector');
     const inspectBtn = div.querySelector('.inspect-btn');
 
+    const multipleLabel = div.querySelector('.f-multiple').parentElement;
+
     typeSelect.addEventListener('change', (e) => {
         if (e.target.value === 'ai') {
             targetSelect.style.display = 'none';
             attrInput.style.display = 'none';
             inspectBtn.style.display = 'none';
+            multipleLabel.style.display = 'none';
             selectorInput.placeholder = "e.g. What is the product price?";
         } else {
             targetSelect.style.display = 'block';
@@ -72,6 +108,7 @@ function addFieldRow(name = '', selector = '', type = 'css', extractType = 'text
                 attrInput.style.display = 'block';
             }
             inspectBtn.style.display = 'flex';
+            multipleLabel.style.display = 'flex';
             selectorInput.placeholder = e.target.value === 'xpath' ? "XPath (e.g. //h1[@class='title'])" : "CSS Selector (e.g. h1.title)";
         }
     });
@@ -211,13 +248,20 @@ document.getElementById('btn-start').addEventListener('click', () => {
             selector: row.querySelector('.f-selector').value,
             type: row.querySelector('.f-type').value, // 'css', 'xpath', 'ai'
             extractType: row.querySelector('.f-extract-target').value, // 'text', 'html', 'href', 'src', 'attribute'
-            attributeName: row.querySelector('.f-attr-name').value
+            attributeName: row.querySelector('.f-attr-name').value,
+            multiple: row.querySelector('.f-multiple') ? row.querySelector('.f-multiple').checked : false
         })).filter(f => f.name && f.selector),
         antiBot: {
             minDelayMs: parseInt(document.getElementById('min-delay').value),
             maxDelayMs: parseInt(document.getElementById('max-delay').value),
             batchSize: parseInt(document.getElementById('batch-size').value),
             batchPauseMs: parseInt(document.getElementById('batch-pause').value)
+        },
+        singlePageOptions: {
+            nextButtonSelector: document.getElementById('next-button-selector').value,
+            maxPages: parseInt(document.getElementById('max-pages').value),
+            infiniteScroll: document.getElementById('enable-infinite-scroll').checked,
+            maxScrolls: parseInt(document.getElementById('max-scrolls').value)
         }
     };
 

@@ -28,6 +28,29 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         chrome.runtime.sendMessage({ action: 'SAVE_PAGE_DATA', data: [data] });
         sendResponse(data);
     }
+    else if (message.action === 'SCROLL_BOTTOM') {
+        window.scrollBy(0, window.innerHeight);
+        sendResponse({ status: 'scrolled' });
+    }
+    else if (message.action === 'CLICK_NEXT') {
+        const selector = message.selector;
+        let el = null;
+        try {
+            if (selector.startsWith('//') || selector.startsWith('(')) { // crude xpath detection
+                const xpathResult = document.evaluate(selector, document, null, XPathResult.FIRST_ORDERED_NODE_TYPE, null);
+                el = xpathResult.singleNodeValue;
+            } else {
+                el = document.querySelector(selector);
+            }
+        } catch(e) {}
+
+        if (el) {
+            el.click();
+            sendResponse({ status: 'clicked' });
+        } else {
+            sendResponse({ status: 'not_found' });
+        }
+    }
     return true;
 });
 
@@ -170,30 +193,41 @@ function executeExtraction(blueprint) {
         }
 
         try {
-            let el = null;
+            let elements = [];
+
             if (field.type === 'xpath') {
-                const xpathResult = document.evaluate(field.selector, document, null, XPathResult.FIRST_ORDERED_NODE_TYPE, null);
-                el = xpathResult.singleNodeValue;
+                const xpathResult = document.evaluate(field.selector, document, null, XPathResult.ORDERED_NODE_SNAPSHOT_TYPE, null);
+                for (let i = 0; i < xpathResult.snapshotLength; i++) {
+                    elements.push(xpathResult.snapshotItem(i));
+                }
             } else {
-                el = document.querySelector(field.selector);
+                elements = Array.from(document.querySelectorAll(field.selector));
             }
 
-            if (!el) {
-                result[field.name] = null;
+            if (elements.length === 0) {
+                result[field.name] = field.multiple ? [] : null;
                 return;
             }
 
-            // Extract based on extractType
-            if (field.extractType === 'text') {
-                result[field.name] = el.innerText.trim();
-            } else if (field.extractType === 'html') {
-                result[field.name] = el.innerHTML;
-            } else if (field.extractType === 'href' || field.extractType === 'src') {
-                result[field.name] = el.getAttribute(field.extractType);
-            } else if (field.extractType === 'attribute' && field.attributeName) {
-                result[field.name] = el.getAttribute(field.attributeName);
+            // Define extraction helper function
+            const extractValue = (el) => {
+                if (field.extractType === 'text') {
+                    return el.innerText ? el.innerText.trim() : "";
+                } else if (field.extractType === 'html') {
+                    return el.innerHTML;
+                } else if (field.extractType === 'href' || field.extractType === 'src') {
+                    return el.getAttribute(field.extractType);
+                } else if (field.extractType === 'attribute' && field.attributeName) {
+                    return el.getAttribute(field.attributeName);
+                } else {
+                    return el.innerText ? el.innerText.trim() : "";
+                }
+            };
+
+            if (field.multiple) {
+                result[field.name] = elements.map(extractValue);
             } else {
-                result[field.name] = el.innerText.trim(); // fallback
+                result[field.name] = extractValue(elements[0]);
             }
 
         } catch (e) {

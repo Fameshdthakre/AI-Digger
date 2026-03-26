@@ -57,102 +57,141 @@ async function startJob(blueprint) {
     jobLogs = [];
     addLog(`Started job: ${blueprint.jobName}`);
     
-    // Parse URLs if it's a multi-url job
-    let urlsToScrape = [];
-    if (blueprint.scrapingType === 'multi-url' && blueprint.urls) {
-        urlsToScrape = blueprint.urls.split('\n').map(u => u.trim()).filter(u => u);
-    } else if (blueprint.scrapingType === 'single-page') {
-        // Get active tab URL
-        let [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
-        urlsToScrape = [tab.url];
-    }
+    if (blueprint.scrapingType === 'multi-url') {
+        let urlsToScrape = blueprint.urls ? blueprint.urls.split('\n').map(u => u.trim()).filter(u => u) : [];
+        jobProgress.total = urlsToScrape.length;
+        let batchCounter = 0;
 
-    jobProgress.total = urlsToScrape.length;
-    let batchCounter = 0;
+        for (let i = 0; i < urlsToScrape.length; i++) {
+            if (!isRunning) break; // Stop if user cancelled
 
-    for (let i = 0; i < urlsToScrape.length; i++) {
-        if (!isRunning) break; // Stop if user cancelled
+            const url = urlsToScrape[i];
+            jobProgress.current = i + 1;
+            addLog(`Scraping URL ${i + 1}/${urlsToScrape.length}: ${url}`);
 
-        const url = urlsToScrape[i];
-        jobProgress.current = i + 1;
-        addLog(`Scraping URL ${i + 1}/${urlsToScrape.length}: ${url}`);
-        console.log(`Scraping URL ${i + 1}/${urlsToScrape.length}: ${url}`);
-
-        try {
-            // 1. Open or update the tab
-            let tab = await createOrUpdateTab(url);
-            
-            // 2. Wait for page to load (simple heuristic)
-            await sleep(2000); 
-
-            // Inject the content script before sending the message
             try {
-                await chrome.scripting.executeScript({
-                    target: { tabId: tab.id },
-                    files: ['content.js']
-                });
-            } catch (err) {
-                addLog(`ERROR: Failed to inject script on ${url}`);
-                console.error("Failed to inject content script:", err);
-            }
+                let tab = await createOrUpdateTab(url);
+                await sleep(2000);
 
-            // 3. Inject and execute the scraper script
-            let extractedData = await chrome.tabs.sendMessage(tab.id, {
-                action: 'EXTRACT_DATA', 
-                blueprint: currentJob 
-            }).catch(err => {
-                addLog(`ERROR: Content script not responding on ${url}`);
-                console.error("Content script not ready...", err);
-                return null;
-            });
+                await ensureScriptInjected(tab.id);
 
-            if (extractedData) {
-                // If there's AI required, process it
-                if (extractedData._pageText) {
-                    addLog("Processing AI extraction...");
-                    try {
-                        const aiExtracted = await processAIExtraction(currentJob, extractedData._pageText);
-                        delete extractedData._pageText; // Clean up payload
-                        extractedData = { ...extractedData, ...aiExtracted };
-                    } catch (e) {
-                        addLog(`AI Extraction failed: ${e.message}`);
-                    }
+                let extractedData = await scrapeTab(tab.id, currentJob, url);
+                if (extractedData) saveExtractedData(extractedData);
+
+                batchCounter++;
+                let delayMs = getRandomDelay(blueprint.antiBot.minDelayMs, blueprint.antiBot.maxDelayMs);
+
+                if (blueprint.antiBot.batchSize > 0 && batchCounter >= blueprint.antiBot.batchSize) {
+                    addLog(`Batch size reached. Pausing for ${blueprint.antiBot.batchPauseMs}ms`);
+                    delayMs = blueprint.antiBot.batchPauseMs;
+                    batchCounter = 0;
                 }
 
-                scrapedData.push(extractedData);
-                chrome.storage.local.set({ scrapedData: scrapedData });
+                if (i < urlsToScrape.length - 1 && isRunning) {
+                    addLog(`Waiting ${delayMs}ms before next URL...`);
+                    await sleep(delayMs);
+                }
+
+            } catch (error) {
+                addLog(`ERROR: Failed to load or scrape ${url}: ${error.message}`);
+            }
+        }
+    } else if (blueprint.scrapingType === 'single-page') {
+        let [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+
+        let maxPages = blueprint.singlePageOptions?.maxPages || 1;
+        jobProgress.total = maxPages;
+
+        await ensureScriptInjected(tab.id);
+
+        for (let page = 1; page <= maxPages; page++) {
+            if (!isRunning) break;
+            jobProgress.current = page;
+            addLog(`Scraping Page ${page} of ${maxPages}...`);
+
+            // Infinite Scroll Logic
+            if (blueprint.singlePageOptions?.infiniteScroll) {
+                let maxScrolls = blueprint.singlePageOptions.maxScrolls || 5;
+                addLog(`Scrolling ${maxScrolls} times...`);
+                for (let s = 0; s < maxScrolls; s++) {
+                    if (!isRunning) break;
+                    await chrome.tabs.sendMessage(tab.id, { action: 'SCROLL_BOTTOM' }).catch(()=>null);
+                    await sleep(getRandomDelay(blueprint.antiBot.minDelayMs, blueprint.antiBot.maxDelayMs));
+                }
+            } else {
+                // Wait basic load if not scrolling
+                await sleep(2000);
             }
 
-            // 4. Handle Anti-Bot Delays
-            batchCounter++;
-            let delayMs = getRandomDelay(blueprint.antiBot.minDelayMs, blueprint.antiBot.maxDelayMs);
-            
-            // Check for batch pause
-            if (blueprint.scrapingType === 'multi-url' && 
-                blueprint.antiBot.batchSize > 0 && 
-                batchCounter >= blueprint.antiBot.batchSize) {
-                addLog(`Batch size reached. Pausing for ${blueprint.antiBot.batchPauseMs}ms`);
-                console.log(`Batch size reached. Pausing for ${blueprint.antiBot.batchPauseMs}ms`);
-                delayMs = blueprint.antiBot.batchPauseMs;
-                batchCounter = 0;
-            }
+            let extractedData = await scrapeTab(tab.id, currentJob, tab.url);
+            if (extractedData) saveExtractedData(extractedData);
 
-            if (i < urlsToScrape.length - 1 && isRunning) {
-                addLog(`Waiting ${delayMs}ms before next URL...`);
-                console.log(`Waiting ${delayMs}ms before next URL...`);
-                await sleep(delayMs);
-            }
+            if (page < maxPages && isRunning) {
+                let nextSelector = blueprint.singlePageOptions?.nextButtonSelector;
+                if (!nextSelector) {
+                    addLog("No 'Next Button' selector provided. Stopping pagination.");
+                    break;
+                }
 
-        } catch (error) {
-            addLog(`ERROR: Failed to load or scrape ${url}: ${error.message}`);
-            console.error(`Failed to scrape ${url}:`, error);
+                addLog(`Clicking next page...`);
+                let clickRes = await chrome.tabs.sendMessage(tab.id, { action: 'CLICK_NEXT', selector: nextSelector }).catch(()=>null);
+
+                if (!clickRes || clickRes.status === 'not_found') {
+                    addLog("Next button not found. Reached end of pagination.");
+                    break;
+                }
+
+                // Wait for page transition / load
+                let delayMs = getRandomDelay(blueprint.antiBot.minDelayMs, blueprint.antiBot.maxDelayMs);
+                await sleep(delayMs + 2000); // add fixed buffer for render
+
+                // Re-inject script in case page navigation cleared it
+                await ensureScriptInjected(tab.id);
+            }
         }
     }
     
     isRunning = false;
     currentJob = null;
     addLog("Job completed!");
-    console.log("Job completed!");
+}
+
+async function ensureScriptInjected(tabId) {
+    try {
+        await chrome.scripting.executeScript({
+            target: { tabId: tabId },
+            files: ['content.js']
+        });
+    } catch (err) {
+        addLog(`Note: content script inject err (may already exist)`);
+    }
+}
+
+async function scrapeTab(tabId, job, url) {
+    let extractedData = await chrome.tabs.sendMessage(tabId, {
+        action: 'EXTRACT_DATA',
+        blueprint: job
+    }).catch(err => {
+        addLog(`ERROR: Content script not responding`);
+        return null;
+    });
+
+    if (extractedData && extractedData._pageText) {
+        addLog("Processing AI extraction...");
+        try {
+            const aiExtracted = await processAIExtraction(job, extractedData._pageText);
+            delete extractedData._pageText;
+            extractedData = { ...extractedData, ...aiExtracted };
+        } catch (e) {
+            addLog(`AI Extraction failed: ${e.message}`);
+        }
+    }
+    return extractedData;
+}
+
+function saveExtractedData(data) {
+    scrapedData.push(data);
+    chrome.storage.local.set({ scrapedData: scrapedData });
 }
 
 // Helper: AI Extraction Caller
