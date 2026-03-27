@@ -170,8 +170,9 @@ async function processNextStep() {
 
             if (state.currentIndex < state.urlsToScrape.length) {
                 addLog(`Waiting ${delayMs}ms before next URL...`);
-                // Schedule next step using Alarms to survive Service Worker termination
-                chrome.alarms.create("nextJobStep", { when: Date.now() + delayMs });
+                // Use setTimeout for actual short delay, alarms as fallback
+                chrome.alarms.create("nextJobStep", { when: Date.now() + 60000 }); // 1 min fallback wake up
+                setTimeout(processNextStep, delayMs);
             } else {
                 completeJob();
             }
@@ -180,7 +181,8 @@ async function processNextStep() {
             addLog(`ERROR: Failed to load or scrape ${url}: ${error.message}`);
             state.currentIndex++;
             await chrome.storage.local.set({ jobState: state });
-            chrome.alarms.create("nextJobStep", { when: Date.now() + 1000 }); // Retry next quickly
+            chrome.alarms.create("nextJobStep", { when: Date.now() + 60000 }); // 1 min fallback wake up
+            setTimeout(processNextStep, 1000); // Retry next quickly
         }
     } else if (blueprint.scrapingType === 'single-page') {
         if (state.currentPage > state.maxPages) {
@@ -242,7 +244,8 @@ async function processNextStep() {
                 await chrome.storage.local.set({ jobState: state });
 
                 addLog(`Waiting ${delayMs}ms before next page...`);
-                chrome.alarms.create("nextJobStep", { when: Date.now() + delayMs + 2000 });
+                chrome.alarms.create("nextJobStep", { when: Date.now() + 60000 }); // 1 min fallback wake up
+                setTimeout(processNextStep, delayMs + 2000);
             } else {
                 completeJob();
             }
@@ -382,22 +385,58 @@ async function scrapeTab(tabId, job, url) {
 function saveExtractedData(data) {
     if (!data) return;
 
+    let rowsToSave = [];
+
+    // CASE 1: Container Model or AI Model (returns structured 'items' array)
     if (data.items && Array.isArray(data.items)) {
-        // Clean array model mapping
         data.items.forEach(itemRow => {
             const finalRow = { ...itemRow };
-            // Append top level scalar data like URL and Timestamp to every row
             if (data.URL) finalRow['URL'] = data.URL;
             if (data.Timestamp) finalRow['Timestamp'] = data.Timestamp;
-
-            scrapedData.push(finalRow);
-            triggerWebhook(currentJob?.webhookUrl, finalRow);
+            rowsToSave.push(finalRow);
         });
-    } else {
-        // Standard single object fallback
-        scrapedData.push(data);
-        triggerWebhook(currentJob?.webhookUrl, data);
     }
+    // CASE 2: Flat Model / Legacy (Returns an object with parallel arrays)
+    else {
+        let maxArrayLength = 0;
+        const arrayFields = [];
+        const scalarFields = [];
+
+        for (const [key, value] of Object.entries(data)) {
+            if (Array.isArray(value)) {
+                arrayFields.push(key);
+                if (value.length > maxArrayLength) maxArrayLength = value.length;
+            } else {
+                scalarFields.push(key);
+            }
+        }
+
+        if (maxArrayLength > 0) {
+            // Unpivot arrays into individual rows
+            for (let i = 0; i < maxArrayLength; i++) {
+                const row = {};
+                scalarFields.forEach(key => row[key] = data[key]);
+                arrayFields.forEach(key => {
+                    // Prevent "undefined" text strings
+                    row[key] = data[key][i] !== undefined ? data[key][i] : "";
+                });
+                rowsToSave.push(row);
+            }
+        } else {
+            // No arrays found, it's just a single flat object
+            rowsToSave.push(data);
+        }
+    }
+
+    // Push clean rows to global storage and trigger webhooks
+    rowsToSave.forEach(row => {
+        // Clean up internal keys just in case
+        delete row['_failedFields'];
+        delete row['_pageMarkdown'];
+
+        scrapedData.push(row);
+        triggerWebhook(currentJob?.webhookUrl, row);
+    });
 
     chrome.storage.local.set({ scrapedData: scrapedData });
 }

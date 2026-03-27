@@ -830,14 +830,26 @@ document.getElementById('btn-export-csv').addEventListener('click', () => {
             return;
         }
 
-        // Generate CSV string
-        const headers = Object.keys(data[0]);
+        // Gather ALL unique headers across all rows in case some rows have missing keys
+        const headerSet = new Set();
+        data.forEach(row => Object.keys(row).forEach(k => headerSet.add(k)));
+        const headers = Array.from(headerSet);
+
         const csvRows = [];
-        csvRows.push(headers.join(',')); // Header row
+        // Header row
+        csvRows.push(headers.map(h => `"${String(h).replace(/"/g, '""')}"`).join(','));
 
         for (const row of data) {
             const values = headers.map(header => {
-                let val = row[header] === null ? "" : String(row[header]);
+                let rawVal = row[header];
+
+                // Prevent literal "undefined" or "null" text
+                if (rawVal === null || rawVal === undefined) rawVal = "";
+
+                // If an array somehow survived (e.g., user scraped nested tags), format it safely
+                if (typeof rawVal === 'object') rawVal = JSON.stringify(rawVal);
+
+                let val = String(rawVal);
                 // Escape quotes and wrap in quotes for CSV safety
                 val = val.replace(/"/g, '""');
                 return `"${val}"`;
@@ -847,8 +859,8 @@ document.getElementById('btn-export-csv').addEventListener('click', () => {
 
         const csvString = csvRows.join('\n');
         
-        // Create download blob
-        const blob = new Blob([csvString], { type: 'text/csv' });
+        // Create download blob with UTF-8 BOM so Excel parses special characters correctly
+        const blob = new Blob([new Uint8Array([0xEF, 0xBB, 0xBF]), csvString], { type: 'text/csv;charset=utf-8;' });
         const url = URL.createObjectURL(blob);
         
         chrome.downloads.download({
