@@ -315,7 +315,7 @@ async function scrapeTab(tabId, job, url) {
         if (extractedData._failedFields && extractedData._failedFields.length > 0) {
             addLog(`Attempting self-healing for ${extractedData._failedFields.length} failed fields...`);
             try {
-                const healedData = await processSelfHealing(job, extractedData._failedFields, extractedData._pageMarkdown);
+                const healedData = await processSelfHealing(tabId, job, extractedData._failedFields, extractedData._pageMarkdown);
                 extractedData = { ...extractedData, ...healedData.recoveredValues };
 
                 // Update job blueprint locally
@@ -477,11 +477,10 @@ async function processAIExtraction(blueprint, text) {
     if (aiFields.length === 0) return {};
 
     // Build the prompt
-    let prompt = "Extract the following information from the text provided below.\n";
-    prompt += "You MUST return a valid JSON object strictly matching this schema: { \"items\": [ { \"Field1Name\": \"value\" } ] }.\n";
-    prompt += "Each item in the array must represent a discrete row/card/product/item found in the text.\n";
-    prompt += "If a field is missing for a specific item, return null for that field.\n\n";
-    prompt += "Fields to extract for EACH item:\n";
+    let prompt = "You are an expert data extraction agent. Extract the requested fields from the source Markdown.\n";
+    prompt += "Each item must represent a discrete row/card/product found in the text. ";
+    prompt += "If a field is missing, return null.\n\n";
+    prompt += "Fields to extract:\n";
     aiFields.forEach(f => {
         prompt += `- "${f.name}": ${f.selector}\n`;
     });
@@ -497,6 +496,30 @@ async function processAIExtraction(blueprint, text) {
         const model = settings.openai.model || 'gpt-4o';
         if (!apiKey) throw new Error("OpenAI API key missing.");
 
+        const schemaProperties = {};
+        const requiredFields = [];
+        aiFields.forEach(f => {
+            schemaProperties[f.name] = { type: ["string", "null"] };
+            requiredFields.push(f.name);
+        });
+
+        const schema = {
+            type: "object",
+            properties: {
+                items: {
+                    type: "array",
+                    items: {
+                        type: "object",
+                        properties: schemaProperties,
+                        required: requiredFields,
+                        additionalProperties: false
+                    }
+                }
+            },
+            required: ["items"],
+            additionalProperties: false
+        };
+
         const response = await fetch('https://api.openai.com/v1/chat/completions', {
             method: 'POST',
             headers: {
@@ -507,7 +530,7 @@ async function processAIExtraction(blueprint, text) {
                 model: model,
                 messages: [{ role: "user", content: prompt }],
                 temperature: 0.1,
-                response_format: { type: "json_object" }
+                response_format: { type: "json_schema", json_schema: { name: "extraction", strict: true, schema: schema } }
             })
         });
 
@@ -520,12 +543,30 @@ async function processAIExtraction(blueprint, text) {
         const model = settings.gemini.model || 'gemini-2.5-flash';
         if (!apiKey) throw new Error("Gemini API key missing.");
 
+        const schemaProperties = {};
+        aiFields.forEach(f => {
+            schemaProperties[f.name] = { type: "string", nullable: true };
+        });
+
+        const schema = {
+            type: "object",
+            properties: {
+                items: {
+                    type: "array",
+                    items: {
+                        type: "object",
+                        properties: schemaProperties
+                    }
+                }
+            }
+        };
+
         const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
                 contents: [{ parts: [{ text: prompt }] }],
-                generationConfig: { responseMimeType: "application/json" }
+                generationConfig: { responseMimeType: "application/json", responseSchema: schema }
             })
         });
 
@@ -568,7 +609,7 @@ async function processAIExtraction(blueprint, text) {
 }
 
 // Helper: Agentic Self-Healing Caller
-async function processSelfHealing(job, failedFields, markdown) {
+async function processSelfHealing(tabId, job, failedFields, markdown) {
     const settingsObj = await chrome.storage.sync.get(['aiSettings']);
     const settings = settingsObj.aiSettings;
 
@@ -576,86 +617,177 @@ async function processSelfHealing(job, failedFields, markdown) {
         throw new Error("AI Platform not configured for self-healing.");
     }
 
-    let prompt = "You are an expert web scraper recovery agent.\n";
-    prompt += "The following data fields failed to match any elements on the page using their current CSS/XPath selectors.\n";
-    prompt += "Given the page Markdown below, find the missing values for these fields, AND suggest a new, resilient CSS selector for them.\n\n";
-    prompt += "Return ONLY a valid JSON object with two keys:\n";
-    prompt += "- 'recoveredValues': { \"FieldName\": \"ExtractedValue\" }\n";
-    prompt += "- 'updatedFields': [ { \"name\": \"FieldName\", \"selector\": \"new.css.selector\" } ]\n\n";
-    prompt += "Failed Fields:\n";
+    let basePrompt = "You are an expert web scraper recovery agent.\n";
+    basePrompt += "The following data fields failed to match any elements on the page using their current CSS/XPath selectors.\n";
+    basePrompt += "Given the page Markdown below, find the missing values for these fields, AND deduce a highly resilient, semantic CSS selector for them.\n";
+    basePrompt += "Prioritize attributes like data-testid, aria-label, or semantic class names over structural paths.\n\n";
+    basePrompt += "Failed Fields:\n";
     failedFields.forEach(f => {
-        prompt += `- Name: "${f.name}", Old Selector: "${f.selector}"\n`;
+        basePrompt += `- Name: "${f.name}", Old Selector: "${f.selector}"\n`;
     });
 
     const truncatedText = markdown.substring(0, 30000);
-    prompt += `\n\nPage Markdown:\n"""\n${truncatedText}\n"""`;
+    basePrompt += `\n\nPage Markdown:\n"""\n${truncatedText}\n"""`;
 
-    let resultJsonStr = "{}";
+    let attempts = 0;
+    let feedback = "";
 
-    if (settings.aiPlatform === 'openai') {
-        const apiKey = settings.openai.key;
-        const model = settings.openai.model || 'gpt-4o';
-        const response = await fetch('https://api.openai.com/v1/chat/completions', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${apiKey}` },
-            body: JSON.stringify({
-                model: model,
-                messages: [{ role: "user", content: prompt }],
-                temperature: 0.1,
-                response_format: { type: "json_object" }
-            })
+    while (attempts < 2) {
+        attempts++;
+        let prompt = basePrompt;
+        if (feedback) {
+            prompt += `\n\nFeedback from previous attempt:\n${feedback}\nPlease provide alternative selectors.`;
+        }
+
+        let resultJsonStr = "{}";
+
+        const schemaPropertiesRecovered = {};
+        failedFields.forEach(f => {
+            schemaPropertiesRecovered[f.name] = { type: ["string", "null"] };
         });
-        if (!response.ok) throw new Error(`OpenAI API error: ${response.statusText}`);
-        const data = await response.json();
-        resultJsonStr = data.choices[0].message.content;
 
-    } else if (settings.aiPlatform === 'gemini') {
-        const apiKey = settings.gemini.key;
-        const model = settings.gemini.model || 'gemini-2.5-flash';
-        const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-                contents: [{ parts: [{ text: prompt }] }],
-                generationConfig: { responseMimeType: "application/json" }
-            })
-        });
-        if (!response.ok) throw new Error(`Gemini API error: ${response.statusText}`);
-        const data = await response.json();
-        resultJsonStr = data.candidates[0].content.parts[0].text;
-
-    } else if (settings.aiPlatform === 'claude') {
-        const apiKey = settings.claude.key;
-        const model = settings.claude.model || 'claude-3-5-sonnet-20241022';
-        const response = await fetch('https://api.anthropic.com/v1/messages', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                'x-api-key': apiKey,
-                'anthropic-version': '2023-06-01'
+        const openAiSchema = {
+            type: "object",
+            properties: {
+                recoveredValues: {
+                    type: "object",
+                    properties: schemaPropertiesRecovered,
+                    required: failedFields.map(f => f.name),
+                    additionalProperties: false
+                },
+                updatedFields: {
+                    type: "array",
+                    items: {
+                        type: "object",
+                        properties: {
+                            name: { type: "string" },
+                            selector: { type: "string" }
+                        },
+                        required: ["name", "selector"],
+                        additionalProperties: false
+                    }
+                }
             },
-            body: JSON.stringify({
-                model: model,
-                max_tokens: 1024,
-                messages: [{ role: "user", content: prompt }]
-            })
-        });
-        if (!response.ok) throw new Error(`Claude API error: ${response.statusText}`);
-        const data = await response.json();
-        resultJsonStr = data.content[0].text;
-    }
-
-    try {
-        const cleanStr = resultJsonStr.replace(/^```json/i, '').replace(/```$/, '').trim();
-        const parsed = JSON.parse(cleanStr);
-        return {
-            recoveredValues: parsed.recoveredValues || {},
-            updatedFields: parsed.updatedFields || []
+            required: ["recoveredValues", "updatedFields"],
+            additionalProperties: false
         };
-    } catch (e) {
-        console.error("Failed to parse Self-Healing response as JSON", resultJsonStr);
-        throw new Error("AI returned invalid JSON during recovery.");
+
+        const geminiSchema = {
+            type: "object",
+            properties: {
+                recoveredValues: {
+                    type: "object",
+                    properties: failedFields.reduce((acc, f) => { acc[f.name] = { type: "string", nullable: true }; return acc; }, {})
+                },
+                updatedFields: {
+                    type: "array",
+                    items: {
+                        type: "object",
+                        properties: {
+                            name: { type: "string" },
+                            selector: { type: "string" }
+                        }
+                    }
+                }
+            }
+        };
+
+        if (settings.aiPlatform === 'openai') {
+            const apiKey = settings.openai.key;
+            const model = settings.openai.model || 'gpt-4o';
+            const response = await fetch('https://api.openai.com/v1/chat/completions', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${apiKey}` },
+                body: JSON.stringify({
+                    model: model,
+                    messages: [{ role: "user", content: prompt }],
+                    temperature: 0.1,
+                    response_format: { type: "json_schema", json_schema: { name: "healing", strict: true, schema: openAiSchema } }
+                })
+            });
+            if (!response.ok) throw new Error(`OpenAI API error: ${response.statusText}`);
+            const data = await response.json();
+            resultJsonStr = data.choices[0].message.content;
+
+        } else if (settings.aiPlatform === 'gemini') {
+            const apiKey = settings.gemini.key;
+            const model = settings.gemini.model || 'gemini-2.5-flash';
+            const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    contents: [{ parts: [{ text: prompt }] }],
+                    generationConfig: { responseMimeType: "application/json", responseSchema: geminiSchema }
+                })
+            });
+            if (!response.ok) throw new Error(`Gemini API error: ${response.statusText}`);
+            const data = await response.json();
+            resultJsonStr = data.candidates[0].content.parts[0].text;
+
+        } else if (settings.aiPlatform === 'claude') {
+            const apiKey = settings.claude.key;
+            const model = settings.claude.model || 'claude-3-5-sonnet-20241022';
+
+            let claudePrompt = prompt + "\n\nReturn ONLY a valid JSON object matching this schema:\n" + JSON.stringify(openAiSchema, null, 2);
+
+            const response = await fetch('https://api.anthropic.com/v1/messages', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'x-api-key': apiKey,
+                    'anthropic-version': '2023-06-01'
+                },
+                body: JSON.stringify({
+                    model: model,
+                    max_tokens: 1024,
+                    messages: [{ role: "user", content: claudePrompt }]
+                })
+            });
+            if (!response.ok) throw new Error(`Claude API error: ${response.statusText}`);
+            const data = await response.json();
+            resultJsonStr = data.content[0].text;
+        }
+
+        try {
+            const cleanStr = resultJsonStr.replace(/^```json/i, '').replace(/```$/, '').trim();
+            const parsed = JSON.parse(cleanStr);
+
+            // Agentic verification step
+            let allValid = true;
+            let currentFeedback = "";
+            const healedFields = parsed.updatedFields || [];
+
+            for (let healedF of healedFields) {
+                // Find original field to get its settings
+                const originalField = job.fields.find(f => f.name === healedF.name);
+                if (!originalField) continue;
+
+                const testField = { ...originalField, selector: healedF.selector };
+                const testRes = await chrome.tabs.sendMessage(tabId, { action: 'TEST_SELECTOR', field: testField }).catch(() => null);
+
+                if (!testRes || testRes.result === null || testRes.result === undefined || (Array.isArray(testRes.result) && testRes.result.length === 0)) {
+                    allValid = false;
+                    currentFeedback += `The selector you provided for "${healedF.name}" (${healedF.selector}) returned null. `;
+                }
+            }
+
+            if (allValid || attempts >= 2) {
+                return {
+                    recoveredValues: parsed.recoveredValues || {},
+                    updatedFields: parsed.updatedFields || []
+                };
+            } else {
+                addLog(`Self-healing attempt ${attempts} failed validation. Retrying...`);
+                feedback = currentFeedback;
+            }
+
+        } catch (e) {
+            console.error("Failed to parse Self-Healing response as JSON", resultJsonStr);
+            if (attempts >= 2) throw new Error("AI returned invalid JSON during recovery.");
+        }
     }
+}
+
 }
 
 // Helper: AI Blueprint Analyzer Caller
@@ -667,17 +799,9 @@ async function analyzePageWithAI(text) {
         throw new Error("AI Platform not configured in settings. Please setup your API keys in the Settings tab.");
     }
 
-    const systemPrompt = `You are an expert web scraping assistant. I will provide you with the text content of a webpage.
-    Your goal is to figure out what type of page this is (e.g., E-commerce product list, Real Estate listings, News Articles, etc.)
-    and suggest the optimal data fields a user would want to extract.
-
-    Return your response strictly as a JSON array of objects. Do not wrap in markdown tags.
-    Each object must have exactly these keys:
-    - "name": string (e.g. "Product Price")
-    - "selector": string (the exact AI prompt to extract this field, e.g. "What is the price of the item?")
-    - "type": "ai"
-    - "multiple": boolean (true if it's a list/grid of items, false if it's a single page item)
-    `;
+    const systemPrompt = `You are an expert web scraping architect. Analyze the provided webpage text content.
+Determine the page archetype (e.g., E-commerce grid, Vendor Listing, Article) and identify the optimal data fields a user would want to extract.
+For each field, write a clear, precise AI extraction prompt (e.g., "What is the price of the item?").`;
 
     const truncatedText = text.substring(0, 20000);
     const prompt = `${systemPrompt}\n\nWebpage Text:\n"""\n${truncatedText}\n"""`;
@@ -689,6 +813,28 @@ async function analyzePageWithAI(text) {
         const model = settings.openai.model || 'gpt-4o';
         if (!apiKey) throw new Error("OpenAI API key missing.");
 
+        const openAiSchema = {
+            type: "object",
+            properties: {
+                fields: {
+                    type: "array",
+                    items: {
+                        type: "object",
+                        properties: {
+                            name: { type: "string" },
+                            selector: { type: "string" },
+                            type: { type: "string", enum: ["ai"] },
+                            multiple: { type: "boolean" }
+                        },
+                        required: ["name", "selector", "type", "multiple"],
+                        additionalProperties: false
+                    }
+                }
+            },
+            required: ["fields"],
+            additionalProperties: false
+        };
+
         const response = await fetch('https://api.openai.com/v1/chat/completions', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${apiKey}` },
@@ -696,7 +842,7 @@ async function analyzePageWithAI(text) {
                 model: model,
                 messages: [{ role: "user", content: prompt }],
                 temperature: 0.1,
-                response_format: { type: "json_object" } // Using json_object wrapper to enforce structure
+                response_format: { type: "json_schema", json_schema: { name: "analysis", strict: true, schema: openAiSchema } }
             })
         });
         if (!response.ok) throw new Error(`OpenAI API error: ${response.statusText}`);
@@ -708,12 +854,30 @@ async function analyzePageWithAI(text) {
         const model = settings.gemini.model || 'gemini-2.5-flash';
         if (!apiKey) throw new Error("Gemini API key missing.");
 
+        const geminiSchema = {
+            type: "object",
+            properties: {
+                fields: {
+                    type: "array",
+                    items: {
+                        type: "object",
+                        properties: {
+                            name: { type: "string" },
+                            selector: { type: "string" },
+                            type: { type: "string", enum: ["ai"] },
+                            multiple: { type: "boolean" }
+                        }
+                    }
+                }
+            }
+        };
+
         const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
                 contents: [{ parts: [{ text: prompt }] }],
-                generationConfig: { responseMimeType: "application/json" }
+                generationConfig: { responseMimeType: "application/json", responseSchema: geminiSchema }
             })
         });
         if (!response.ok) throw new Error(`Gemini API error: ${response.statusText}`);
@@ -746,16 +910,10 @@ async function analyzePageWithAI(text) {
     try {
         const cleanStr = resultJsonStr.replace(/^```json/i, '').replace(/```$/, '').trim();
         let parsed = JSON.parse(cleanStr);
-        // OpenAI json_object usually requires a root key if returning an array
-        if (parsed && !Array.isArray(parsed)) {
-            const keys = Object.keys(parsed);
-            if (keys.length > 0 && Array.isArray(parsed[keys[0]])) {
-                parsed = parsed[keys[0]];
-            } else {
-                parsed = [parsed]; // fallback
-            }
+        if (parsed.fields && Array.isArray(parsed.fields)) {
+            return parsed.fields;
         }
-        return parsed;
+        return Array.isArray(parsed) ? parsed : [];
     } catch (e) {
         console.error("Failed to parse AI Analyze response as JSON", resultJsonStr);
         throw new Error("AI returned invalid JSON format.");
@@ -771,30 +929,8 @@ async function generateBlueprintWithAI(userPrompt, text) {
         throw new Error("AI Platform not configured in settings. Please setup your API keys in the Settings tab.");
     }
 
-    const systemPrompt = `You are an expert web scraping assistant. I will provide you with a user's natural language request and the text/markdown content of a webpage.
-    Your goal is to generate a complete scraping job blueprint based on their request.
-
-    Return your response strictly as a JSON object matching this exact schema. Do not wrap in markdown tags:
-    {
-      "jobName": "A descriptive name (string)",
-      "scrapingType": "single-page" or "multi-url",
-      "containerSelector": "CSS/XPath selector for the repeating item card (e.g. .product-card). Only use if extracting a list/grid of items. Leave empty if single-page generic scrape.",
-      "singlePageOptions": {
-        "nextButtonSelector": "CSS or XPath for the next page button, or empty string",
-        "maxPages": integer (default to 5 if pagination is requested, else 1),
-        "infiniteScroll": boolean,
-        "maxScrolls": integer (default 5)
-      },
-      "fields": [
-        {
-          "name": "Field Name",
-          "selector": "CSS/XPath selector or AI prompt",
-          "type": "css", "xpath", or "ai",
-          "extractType": "text", "html", "href", "src", or "attribute",
-          "multiple": boolean (true if extracting a list/array of items)
-        }
-      ]
-    }`;
+    const systemPrompt = `You are an expert web scraping architect. Generate a complete scraping job blueprint based on the user's natural language request and the provided webpage markdown.
+Ensure the container selector (if applicable) targets the repeating item card (e.g., .product-card).`;
 
     const truncatedText = text.substring(0, 20000);
     const prompt = `${systemPrompt}\n\nUser Request:\n"${userPrompt}"\n\nWebpage Markdown:\n"""\n${truncatedText}\n"""`;
@@ -806,6 +942,43 @@ async function generateBlueprintWithAI(userPrompt, text) {
         const model = settings.openai.model || 'gpt-4o';
         if (!apiKey) throw new Error("OpenAI API key missing.");
 
+        const blueprintSchema = {
+            type: "object",
+            properties: {
+                jobName: { type: "string" },
+                scrapingType: { type: "string", enum: ["single-page", "multi-url"] },
+                containerSelector: { type: "string" },
+                singlePageOptions: {
+                    type: "object",
+                    properties: {
+                        nextButtonSelector: { type: "string" },
+                        maxPages: { type: "integer" },
+                        infiniteScroll: { type: "boolean" },
+                        maxScrolls: { type: "integer" }
+                    },
+                    required: ["nextButtonSelector", "maxPages", "infiniteScroll", "maxScrolls"],
+                    additionalProperties: false
+                },
+                fields: {
+                    type: "array",
+                    items: {
+                        type: "object",
+                        properties: {
+                            name: { type: "string" },
+                            selector: { type: "string" },
+                            type: { type: "string", enum: ["css", "xpath", "ai"] },
+                            extractType: { type: "string", enum: ["text", "html", "href", "src", "attribute"] },
+                            multiple: { type: "boolean" }
+                        },
+                        required: ["name", "selector", "type", "extractType", "multiple"],
+                        additionalProperties: false
+                    }
+                }
+            },
+            required: ["jobName", "scrapingType", "containerSelector", "singlePageOptions", "fields"],
+            additionalProperties: false
+        };
+
         const response = await fetch('https://api.openai.com/v1/chat/completions', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${apiKey}` },
@@ -813,7 +986,7 @@ async function generateBlueprintWithAI(userPrompt, text) {
                 model: model,
                 messages: [{ role: "user", content: prompt }],
                 temperature: 0.1,
-                response_format: { type: "json_object" }
+                response_format: { type: "json_schema", json_schema: { name: "blueprint", strict: true, schema: blueprintSchema } }
             })
         });
         if (!response.ok) throw new Error(`OpenAI API error: ${response.statusText}`);
@@ -825,12 +998,43 @@ async function generateBlueprintWithAI(userPrompt, text) {
         const model = settings.gemini.model || 'gemini-2.5-flash';
         if (!apiKey) throw new Error("Gemini API key missing.");
 
+        const blueprintSchema = {
+            type: "object",
+            properties: {
+                jobName: { type: "string" },
+                scrapingType: { type: "string", enum: ["single-page", "multi-url"] },
+                containerSelector: { type: "string" },
+                singlePageOptions: {
+                    type: "object",
+                    properties: {
+                        nextButtonSelector: { type: "string" },
+                        maxPages: { type: "integer" },
+                        infiniteScroll: { type: "boolean" },
+                        maxScrolls: { type: "integer" }
+                    }
+                },
+                fields: {
+                    type: "array",
+                    items: {
+                        type: "object",
+                        properties: {
+                            name: { type: "string" },
+                            selector: { type: "string" },
+                            type: { type: "string", enum: ["css", "xpath", "ai"] },
+                            extractType: { type: "string", enum: ["text", "html", "href", "src", "attribute"] },
+                            multiple: { type: "boolean" }
+                        }
+                    }
+                }
+            }
+        };
+
         const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
                 contents: [{ parts: [{ text: prompt }] }],
-                generationConfig: { responseMimeType: "application/json" }
+                generationConfig: { responseMimeType: "application/json", responseSchema: blueprintSchema }
             })
         });
         if (!response.ok) throw new Error(`Gemini API error: ${response.statusText}`);

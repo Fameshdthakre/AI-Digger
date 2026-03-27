@@ -43,16 +43,19 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         return true; // async
     }
     else if (message.action === 'CLICK_NEXT') {
-        const selector = message.selector;
+        const selectors = resolveSelectorArray(message.selector);
         let el = null;
-        try {
-            if (selector.startsWith('//') || selector.startsWith('(')) { // crude xpath detection
-                const xpathResult = document.evaluate(selector, document, null, XPathResult.FIRST_ORDERED_NODE_TYPE, null);
-                el = xpathResult.singleNodeValue;
-            } else {
-                el = document.querySelector(selector);
-            }
-        } catch(e) {}
+        for (let selObj of selectors) {
+            let sel = selObj.val;
+            try {
+                if (selObj.type === 'xpath' || sel.startsWith('//') || sel.startsWith('(')) {
+                    el = document.evaluate(sel, document, null, XPathResult.FIRST_ORDERED_NODE_TYPE, null).singleNodeValue;
+                } else {
+                    el = document.querySelector(sel);
+                }
+            } catch(e) {}
+            if (el) break;
+        }
 
         if (el) {
             el.click();
@@ -148,13 +151,18 @@ async function executeAction(actionData) {
 
     // For click and type, find element
     let el = null;
-    try {
-        if (selector.startsWith('//') || selector.startsWith('(')) {
-            el = document.evaluate(selector, document, null, XPathResult.FIRST_ORDERED_NODE_TYPE, null).singleNodeValue;
-        } else {
-            el = document.querySelector(selector);
-        }
-    } catch(e) {}
+    const selectors = resolveSelectorArray(selector);
+    for (let selObj of selectors) {
+        let sel = selObj.val;
+        try {
+            if (selObj.type === 'xpath' || sel.startsWith('//') || sel.startsWith('(')) {
+                el = document.evaluate(sel, document, null, XPathResult.FIRST_ORDERED_NODE_TYPE, null).singleNodeValue;
+            } else {
+                el = document.querySelector(sel);
+            }
+        } catch(e) {}
+        if (el) break;
+    }
 
     if (!el) return false;
 
@@ -261,11 +269,16 @@ function handleClick(e) {
     e.preventDefault();
     e.stopPropagation();
     
-    let selector = "";
+    // Generate resilient selectors
+    const selectors = generateResilientSelectors(hoveredElement);
+
+    // Fallback if we only want xpath
+    let finalSelector = JSON.stringify(selectors);
     if (currentInspectMode === 'xpath') {
-        selector = generateXPath(hoveredElement);
+        finalSelector = generateXPath(hoveredElement);
     } else {
-        selector = generateCssSelector(hoveredElement);
+        // Just send the first resilient one as a plain string if it's not JSON
+        finalSelector = JSON.stringify(selectors);
     }
     
     // Flash green to indicate selection
@@ -276,7 +289,7 @@ function handleClick(e) {
     chrome.runtime.sendMessage({
         action: 'INSPECTOR_RESULT',
         fieldId: currentInspectFieldId,
-        selector: selector
+        selector: finalSelector
     });
 
     setTimeout(() => {
@@ -284,32 +297,55 @@ function handleClick(e) {
     }, 300);
 }
 
-// Generates a robust CSS selector
-function generateCssSelector(el) {
-    if (el.tagName.toLowerCase() === 'html') return 'html';
-    
-    let path = [];
-    while (el.nodeType === Node.ELEMENT_NODE && el.tagName.toLowerCase() !== 'html') {
-        let selector = el.tagName.toLowerCase();
-        
-        if (el.id) {
-            selector += '#' + el.id;
-            path.unshift(selector);
-            break; // IDs are usually unique, we can stop here
-        } else {
-            let sib = el, nth = 1;
-            while (sib = sib.previousElementSibling) {
-                if (sib.tagName.toLowerCase() == selector) nth++;
-            }
-            if (nth != 1) selector += ":nth-of-type("+nth+")";
+function generateResilientSelectors(el) {
+    const selectors = [];
+    if (!el || el.tagName.toLowerCase() === 'html') return [{type: 'css', val: 'html'}];
+
+    const tagName = el.tagName.toLowerCase();
+
+    // 1. High-Priority Custom Data Attributes
+    const stableAttributes = ['data-testid', 'data-asin', 'data-id', 'data-component', 'data-cy', 'aria-label', 'name', 'role'];
+    for (let attr of stableAttributes) {
+        if (el.hasAttribute(attr)) {
+            const val = el.getAttribute(attr).replace(/"/g, '\\"');
+            selectors.push({ type: 'attribute', val: `${tagName}[${attr}="${val}"]` });
+            break; // Got a highly stable one, stop looking for attributes
         }
-        path.unshift(selector);
-        el = el.parentNode;
     }
-    return path.join(' > ');
+
+    // 2. Semantic Class Filtering
+    if (el.classList.length > 0) {
+        const semanticClasses = Array.from(el.classList).filter(cls => {
+            // Filter out common utility frameworks and generated hashes
+            if (/^(tw-|css-|js-|ng-|v-|md:|[0-9]+$)/i.test(cls)) return false;
+            // Filter out highly generic positional or state classes
+            if (['active', 'disabled', 'hidden', 'show', 'flex', 'block', 'w-full', 'row', 'col'].includes(cls)) return false;
+            return true;
+        });
+
+        if (semanticClasses.length > 0) {
+            // Use the first semantic class
+            selectors.push({ type: 'semantic-class', val: `${tagName}.${semanticClasses[0]}` });
+        }
+    }
+
+    // 3. Structural ID (Fall back to ID if it exists and looks non-random)
+    if (el.id && !/\d+/.test(el.id)) {
+        selectors.push({ type: 'css', val: `#${el.id}` });
+    }
+
+    // 4. Absolute structural fallback
+    selectors.push({ type: 'xpath', val: generateXPath(el) });
+
+    return selectors;
 }
 
-// Generates a robust XPath
+// Keep old generateCssSelector around for macro recorder, but make it use the new logic for first element
+function generateCssSelector(el) {
+    const resilient = generateResilientSelectors(el);
+    return resilient[0].val;
+}
+
 let autoDetectActive = false;
 
 function startAutoDetect() {
@@ -537,30 +573,30 @@ function formatValue(val, formatType) {
     }
 }
 
-function waitForElement(selector, timeoutMs = 15000) {
+function waitForElement(rawSelector, timeoutMs = 15000) {
     return new Promise((resolve) => {
-        let el = null;
-        try {
-            if (selector.startsWith('//') || selector.startsWith('(')) {
-                el = document.evaluate(selector, document, null, XPathResult.FIRST_ORDERED_NODE_TYPE, null).singleNodeValue;
-            } else {
-                el = document.querySelector(selector);
-            }
-        } catch(e) {}
+        const selectors = resolveSelectorArray(rawSelector);
 
-        if (el) return resolve(true);
+        const checkElements = () => {
+            for (let selObj of selectors) {
+                let el = null;
+                try {
+                    let selector = selObj.val;
+                    if (selObj.type === 'xpath' || selector.startsWith('//') || selector.startsWith('(')) {
+                        el = document.evaluate(selector, document, null, XPathResult.FIRST_ORDERED_NODE_TYPE, null).singleNodeValue;
+                    } else {
+                        el = document.querySelector(selector);
+                    }
+                } catch(e) {}
+                if (el) return el;
+            }
+            return null;
+        };
+
+        if (checkElements()) return resolve(true);
 
         const observer = new MutationObserver(() => {
-            let found = null;
-            try {
-                if (selector.startsWith('//') || selector.startsWith('(')) {
-                    found = document.evaluate(selector, document, null, XPathResult.FIRST_ORDERED_NODE_TYPE, null).singleNodeValue;
-                } else {
-                    found = document.querySelector(selector);
-                }
-            } catch(e) {}
-
-            if (found) {
+            if (checkElements()) {
                 observer.disconnect();
                 resolve(true);
             }
@@ -575,24 +611,43 @@ function waitForElement(selector, timeoutMs = 15000) {
     });
 }
 
+function resolveSelectorArray(rawSelector) {
+    let arr = [];
+    try {
+        arr = JSON.parse(rawSelector);
+    } catch(e) {
+        // Not a JSON string array, just use the raw value
+        arr = [{ type: 'css', val: rawSelector }];
+    }
+    return arr;
+}
+
 function extractFieldData(field, contextNode = document) {
     if (field.type === 'ai') return null; // AI handled in background
 
     try {
         let elements = [];
+        const selectors = resolveSelectorArray(field.selector);
 
-        if (field.type === 'xpath') {
-            // If we are searching within a context node, ensure the xpath is relative
-            let selector = field.selector;
-            if (contextNode !== document && selector.startsWith('//')) {
-                selector = '.' + selector;
-            }
-            const xpathResult = document.evaluate(selector, contextNode, null, XPathResult.ORDERED_NODE_SNAPSHOT_TYPE, null);
-            for (let i = 0; i < xpathResult.snapshotLength; i++) {
-                elements.push(xpathResult.snapshotItem(i));
-            }
-        } else {
-            elements = Array.from(contextNode.querySelectorAll(field.selector));
+        for (let selObj of selectors) {
+            let selector = selObj.val;
+            try {
+                if (selObj.type === 'xpath' || selector.startsWith('//') || selector.startsWith('(')) {
+                    // If we are searching within a context node, ensure the xpath is relative
+                    if (contextNode !== document && selector.startsWith('//')) {
+                        selector = '.' + selector;
+                    }
+                    const xpathResult = document.evaluate(selector, contextNode, null, XPathResult.ORDERED_NODE_SNAPSHOT_TYPE, null);
+                    for (let i = 0; i < xpathResult.snapshotLength; i++) {
+                        elements.push(xpathResult.snapshotItem(i));
+                    }
+                } else {
+                    elements = Array.from(contextNode.querySelectorAll(selector));
+                }
+
+                // If we found something, break out of fallback loop
+                if (elements.length > 0) break;
+            } catch(e) {}
         }
 
         if (elements.length === 0) {
@@ -660,14 +715,20 @@ function executeExtraction(blueprint) {
         result['items'] = [];
         let containers = [];
         try {
-            // Attempt to query containers (supporting basic xpath or css)
-            if (blueprint.containerSelector.startsWith('//') || blueprint.containerSelector.startsWith('(')) {
-                const xpathRes = document.evaluate(blueprint.containerSelector, document, null, XPathResult.ORDERED_NODE_SNAPSHOT_TYPE, null);
-                for (let i = 0; i < xpathRes.snapshotLength; i++) {
-                    containers.push(xpathRes.snapshotItem(i));
-                }
-            } else {
-                containers = Array.from(document.querySelectorAll(blueprint.containerSelector));
+            const containerSelectors = resolveSelectorArray(blueprint.containerSelector);
+            for (let selObj of containerSelectors) {
+                let selector = selObj.val;
+                try {
+                    if (selObj.type === 'xpath' || selector.startsWith('//') || selector.startsWith('(')) {
+                        const xpathRes = document.evaluate(selector, document, null, XPathResult.ORDERED_NODE_SNAPSHOT_TYPE, null);
+                        for (let i = 0; i < xpathRes.snapshotLength; i++) {
+                            containers.push(xpathRes.snapshotItem(i));
+                        }
+                    } else {
+                        containers = Array.from(document.querySelectorAll(selector));
+                    }
+                    if (containers.length > 0) break;
+                } catch(e) {}
             }
         } catch(e) {
             console.error("Container selector failed", e);
