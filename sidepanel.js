@@ -43,10 +43,6 @@ scheduleTargetMode.addEventListener('change', (e) => {
     scheduleStartUrlGroup.style.display = e.target.value === 'start-url' ? 'block' : 'none';
     scheduleMultipleUrlsGroup.style.display = e.target.value === 'multiple-urls' ? 'block' : 'none';
 });
-const scrollsContainer = document.getElementById('scrolls-container');
-enableScrolls.addEventListener('change', (e) => {
-    scrollsContainer.style.display = e.target.checked ? 'block' : 'none';
-});
 
 // Test Container Button
 document.getElementById('test-container-btn').addEventListener('click', async () => {
