@@ -33,7 +33,7 @@ document.getElementById('inspect-next-btn').addEventListener('click', async () =
     // Inject script programmatically if it's not already there
     await chrome.scripting.executeScript({
         target: { tabId: tab.id },
-        files: ['content.js']
+        files: ['turndown.js', 'content.js']
     }).catch(err => console.error("Failed to inject content.js:", err));
 
     chrome.tabs.sendMessage(tab.id, { action: 'START_INSPECTOR_FOR_FIELD', fieldId: 'next-button-selector', mode: 'css' }, (response) => {
@@ -143,7 +143,7 @@ function addFieldRow(name = '', selector = '', type = 'css', extractType = 'text
         // Inject script programmatically if it's not already there
         await chrome.scripting.executeScript({
             target: { tabId: tab.id },
-            files: ['content.js']
+            files: ['turndown.js', 'content.js']
         }).catch(err => console.error("Failed to inject content.js:", err));
 
         const mode = typeSelect.value; // css or xpath
@@ -177,7 +177,7 @@ function addFieldRow(name = '', selector = '', type = 'css', extractType = 'text
 
         await chrome.scripting.executeScript({
             target: { tabId: tab.id },
-            files: ['content.js']
+            files: ['turndown.js', 'content.js']
         }).catch(err => console.error("Failed to inject content.js:", err));
 
         chrome.tabs.sendMessage(tab.id, { action: 'TEST_SELECTOR', field: fieldData }, (response) => {
@@ -235,7 +235,7 @@ function addActionRow(type = 'click', selector = '', text = '') {
         const [tab] = await chrome.tabs.query({active: true, currentWindow: true});
         await chrome.scripting.executeScript({
             target: { tabId: tab.id },
-            files: ['content.js']
+            files: ['turndown.js', 'content.js']
         }).catch(err => console.error(err));
 
         chrome.tabs.sendMessage(tab.id, { action: 'START_INSPECTOR_FOR_FIELD', fieldId: actionId, mode: 'css' }, (response) => {
@@ -263,7 +263,7 @@ document.getElementById('btn-auto-detect').addEventListener('click', async () =>
     const [tab] = await chrome.tabs.query({active: true, currentWindow: true});
     await chrome.scripting.executeScript({
         target: { tabId: tab.id },
-        files: ['content.js']
+        files: ['turndown.js', 'content.js']
     }).catch(err => console.error(err));
 
     chrome.tabs.sendMessage(tab.id, { action: 'START_AUTO_DETECT' }, (response) => {
@@ -322,7 +322,7 @@ document.getElementById('btn-ai-analyze').addEventListener('click', async () => 
     const [tab] = await chrome.tabs.query({active: true, currentWindow: true});
     await chrome.scripting.executeScript({
         target: { tabId: tab.id },
-        files: ['content.js']
+        files: ['turndown.js', 'content.js']
     }).catch(err => console.error(err));
 
     chrome.tabs.sendMessage(tab.id, { action: 'GET_PAGE_TEXT' }, (response) => {
@@ -373,6 +373,7 @@ function getBlueprintFromUI() {
         jobName: document.getElementById('job-name').value,
         scrapingType: document.getElementById('scrape-mode').value,
         urls: document.getElementById('url-list').value,
+        webhookUrl: document.getElementById('webhook-url').value,
         actions: Array.from(document.getElementById('actions-container').querySelectorAll('.field-row')).map(row => ({
             type: row.querySelector('.a-type').value,
             selector: row.querySelector('.a-selector').value,
@@ -444,6 +445,7 @@ document.getElementById('saved-jobs-select').addEventListener('change', (e) => {
     document.getElementById('scrape-mode').value = blueprint.scrapingType;
     document.getElementById('scrape-mode').dispatchEvent(new Event('change'));
     document.getElementById('url-list').value = blueprint.urls || '';
+    document.getElementById('webhook-url').value = blueprint.webhookUrl || '';
 
     // Set Anti-Bot
     if (blueprint.antiBot) {
