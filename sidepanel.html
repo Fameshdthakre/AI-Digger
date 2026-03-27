@@ -110,12 +110,21 @@
                     <label>Job Name</label>
                     <input type="text" id="job-name" value="My Scraper Job" />
                 </div>
-                <div class="form-group">
-                    <label>Scraping Mode</label>
-                    <select id="scrape-mode">
-                        <option value="single-page">Single Page (Current Tab)</option>
-                        <option value="multi-url">Multi-URL List</option>
-                    </select>
+                <div class="flex mt-2 mb-4">
+                    <div class="flex-1">
+                        <label>Scraping Mode</label>
+                        <select id="scrape-mode">
+                            <option value="single-page">Single Page (Current Tab)</option>
+                            <option value="multi-url">Multi-URL List</option>
+                        </select>
+                    </div>
+                    <div class="flex-1">
+                        <label>Output Format</label>
+                        <select id="output-format">
+                            <option value="flat">Flat (Strict Row/Column)</option>
+                            <option value="grouped">Grouped (Array per Page)</option>
+                        </select>
+                    </div>
                 </div>
                 <div class="form-group" id="url-list-group" style="display: none;">
                     <label>Target URLs (One per line)</label>
@@ -138,8 +147,10 @@
                 <div style="font-size: 11px; color: var(--text-muted); margin-bottom: 8px;">If scraping a list/grid, enter the selector for the repeating item card. The data fields below will be extracted relative to this container.</div>
                 <div style="display: flex; gap: 8px;">
                     <button class="inspect-btn" id="inspect-container-btn" title="Inspect Container" style="flex-shrink: 0;">🔍</button>
-                    <input type="text" id="item-container-selector" placeholder="CSS or XPath for repeating Item Container (e.g. .product-card)" style="margin-bottom: 0;" />
+                    <button class="test-btn" id="test-container-btn" title="Test Container" style="flex-shrink: 0;">🧪</button>
+                    <input type="text" id="item-container-selector" placeholder="CSS or XPath for repeating Item Container (e.g. .product-card)" style="margin-bottom: 0; flex: 1;" />
                 </div>
+                <div class="preview-box" id="container-preview-box" style="margin-top: 8px;"></div>
             </div>
 
             <div class="card">
@@ -164,8 +175,10 @@
                         <label>Pagination 'Next' Button</label>
                         <div style="display: flex; gap: 8px;">
                             <button class="inspect-btn" id="inspect-next-btn" title="Inspect Next Button" style="flex-shrink: 0;">🔍</button>
-                            <input type="text" id="next-button-selector" placeholder="CSS or XPath for Next button" />
+                            <button class="test-btn" id="test-next-btn" title="Test Next Button" style="flex-shrink: 0;">🧪</button>
+                            <input type="text" id="next-button-selector" placeholder="CSS or XPath for Next button" style="flex: 1;" />
                         </div>
+                        <div class="preview-box" id="next-preview-box" style="margin-top: 8px;"></div>
                     </div>
                     <div style="flex: 1;">
                         <label>Max Pages</label>
