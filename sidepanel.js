@@ -831,13 +831,22 @@ document.getElementById('btn-export-csv').addEventListener('click', () => {
         }
 
         // Generate CSV string
-        const headers = Object.keys(data[0]);
-        const csvRows = [];
-        csvRows.push(headers.join(',')); // Header row
+        // 1. Collect ALL unique headers across all rows
+        const headerSet = new Set();
+        data.forEach(row => {
+            Object.keys(row).forEach(key => headerSet.add(key));
+        });
+        const headers = Array.from(headerSet);
 
+        const csvRows = [];
+        // Header row
+        csvRows.push(headers.map(h => `"${h.replace(/"/g, '""')}"`).join(','));
+
+        // 2. Map data for each row against the unified headers
         for (const row of data) {
             const values = headers.map(header => {
-                let val = row[header] === null ? "" : String(row[header]);
+                // Handle undefined, null, or empty gracefully
+                let val = (row[header] === undefined || row[header] === null) ? "" : String(row[header]);
                 // Escape quotes and wrap in quotes for CSV safety
                 val = val.replace(/"/g, '""');
                 return `"${val}"`;
