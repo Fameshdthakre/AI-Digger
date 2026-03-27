@@ -350,7 +350,24 @@ async function scrapeTab(tabId, job, url) {
             addLog("Processing AI extraction...");
             try {
                 const aiExtracted = await processAIExtraction(job, extractedData._pageMarkdown);
-                extractedData = { ...extractedData, ...aiExtracted };
+
+                // Merge AI items with deterministic items
+                if (aiExtracted.items && Array.isArray(aiExtracted.items)) {
+                    if (!extractedData.items) extractedData.items = [];
+
+                    // If deterministic found 10 items, and AI found 10 items, merge them by index
+                    if (extractedData.items.length > 0) {
+                        aiExtracted.items.forEach((aiItem, idx) => {
+                            if (extractedData.items[idx]) {
+                                extractedData.items[idx] = { ...extractedData.items[idx], ...aiItem };
+                            } else {
+                                extractedData.items.push(aiItem); // Extra AI items
+                            }
+                        });
+                    } else {
+                        extractedData.items = aiExtracted.items; // Only AI items exist
+                    }
+                }
             } catch (e) {
                 addLog(`AI Extraction failed: ${e.message}`);
             }
@@ -363,37 +380,21 @@ async function scrapeTab(tabId, job, url) {
 }
 
 function saveExtractedData(data) {
-    // Check if any field returned an array (multiple items)
-    let maxArrayLength = 0;
-    const arrayFields = [];
-    const scalarFields = [];
+    if (!data) return;
 
-    for (const [key, value] of Object.entries(data)) {
-        if (Array.isArray(value)) {
-            arrayFields.push(key);
-            if (value.length > maxArrayLength) {
-                maxArrayLength = value.length;
-            }
-        } else {
-            scalarFields.push(key);
-        }
-    }
+    if (data.items && Array.isArray(data.items)) {
+        // Clean array model mapping
+        data.items.forEach(itemRow => {
+            const finalRow = { ...itemRow };
+            // Append top level scalar data like URL and Timestamp to every row
+            if (data.URL) finalRow['URL'] = data.URL;
+            if (data.Timestamp) finalRow['Timestamp'] = data.Timestamp;
 
-    if (maxArrayLength > 0) {
-        // Unpivot/Transpose arrays into individual rows
-        for (let i = 0; i < maxArrayLength; i++) {
-            const row = {};
-            // Copy scalar values (like URL, Timestamp, or non-multiple fields)
-            scalarFields.forEach(key => row[key] = data[key]);
-            // Copy array values for this index
-            arrayFields.forEach(key => {
-                row[key] = data[key][i] !== undefined ? data[key][i] : null;
-            });
-            scrapedData.push(row);
-            triggerWebhook(currentJob?.webhookUrl, row);
-        }
+            scrapedData.push(finalRow);
+            triggerWebhook(currentJob?.webhookUrl, finalRow);
+        });
     } else {
-        // No arrays, just push the single row
+        // Standard single object fallback
         scrapedData.push(data);
         triggerWebhook(currentJob?.webhookUrl, data);
     }
@@ -427,11 +428,13 @@ async function processAIExtraction(blueprint, text) {
     if (aiFields.length === 0) return {};
 
     // Build the prompt
-    let prompt = "Extract the following information from the text provided below. Return ONLY a valid JSON object where the keys are the Field Names exactly as requested. Do not wrap in markdown tags or add explanations.\n\n";
-    prompt += "Fields to extract:\n";
+    let prompt = "Extract the following information from the text provided below.\n";
+    prompt += "You MUST return a valid JSON object strictly matching this schema: { \"items\": [ { \"Field1Name\": \"value\" } ] }.\n";
+    prompt += "Each item in the array must represent a discrete row/card/product/item found in the text.\n";
+    prompt += "If a field is missing for a specific item, return null for that field.\n\n";
+    prompt += "Fields to extract for EACH item:\n";
     aiFields.forEach(f => {
-        let typeHint = f.multiple ? " (Must return an array of strings)" : " (Return a single string)";
-        prompt += `- "${f.name}": ${f.selector}${typeHint}\n`;
+        prompt += `- "${f.name}": ${f.selector}\n`;
     });
 
     // Truncate text to avoid token limits roughly
@@ -726,6 +729,7 @@ async function generateBlueprintWithAI(userPrompt, text) {
     {
       "jobName": "A descriptive name (string)",
       "scrapingType": "single-page" or "multi-url",
+      "containerSelector": "CSS/XPath selector for the repeating item card (e.g. .product-card). Only use if extracting a list/grid of items. Leave empty if single-page generic scrape.",
       "singlePageOptions": {
         "nextButtonSelector": "CSS or XPath for the next page button, or empty string",
         "maxPages": integer (default to 5 if pagination is requested, else 1),

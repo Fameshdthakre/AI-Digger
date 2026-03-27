@@ -26,6 +26,24 @@ enableScrolls.addEventListener('change', (e) => {
     scrollsContainer.style.display = e.target.checked ? 'block' : 'none';
 });
 
+// Inspect Container Button
+document.getElementById('inspect-container-btn').addEventListener('click', async () => {
+    const [tab] = await chrome.tabs.query({active: true, currentWindow: true});
+    await chrome.scripting.executeScript({
+        target: { tabId: tab.id },
+        files: ['turndown.js', 'content.js']
+    }).catch(err => console.error("Failed to inject content.js:", err));
+
+    chrome.tabs.sendMessage(tab.id, { action: 'START_INSPECTOR_FOR_FIELD', fieldId: 'item-container-selector', mode: 'css' }, (response) => {
+        if (response && response.status === 'inspector_started') {
+            const btn = document.getElementById('inspect-container-btn');
+            btn.style.backgroundColor = '#e0f2fe';
+            btn.style.borderColor = '#3b82f6';
+            btn.innerText = '🎯';
+        }
+    });
+});
+
 // Inspect Next Button
 document.getElementById('inspect-next-btn').addEventListener('click', async () => {
     const [tab] = await chrome.tabs.query({active: true, currentWindow: true});
@@ -394,6 +412,10 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
                 document.getElementById('scrape-mode').dispatchEvent(new Event('change'));
             }
 
+            if (bp.containerSelector) {
+                document.getElementById('item-container-selector').value = bp.containerSelector;
+            }
+
             if (bp.singlePageOptions) {
                 if (bp.singlePageOptions.nextButtonSelector) {
                     document.getElementById('next-button-selector').value = bp.singlePageOptions.nextButtonSelector;
@@ -487,6 +509,7 @@ function getBlueprintFromUI() {
         scrapingType: document.getElementById('scrape-mode').value,
         urls: document.getElementById('url-list').value,
         webhookUrl: document.getElementById('webhook-url').value,
+        containerSelector: document.getElementById('item-container-selector').value,
         actions: Array.from(document.getElementById('actions-container').querySelectorAll('.field-row')).map(row => ({
             type: row.querySelector('.a-type').value,
             selector: row.querySelector('.a-selector').value,
@@ -559,6 +582,7 @@ document.getElementById('saved-jobs-select').addEventListener('change', (e) => {
     document.getElementById('scrape-mode').dispatchEvent(new Event('change'));
     document.getElementById('url-list').value = blueprint.urls || '';
     document.getElementById('webhook-url').value = blueprint.webhookUrl || '';
+    document.getElementById('item-container-selector').value = blueprint.containerSelector || '';
 
     // Set Anti-Bot
     if (blueprint.antiBot) {
@@ -683,7 +707,17 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     if (message.action === 'INSPECTOR_RESULT') {
         const { fieldId, selector } = message;
 
-        if (fieldId === 'next-button-selector') {
+        if (fieldId === 'item-container-selector') {
+            const selectorInput = document.getElementById('item-container-selector');
+            if (selectorInput) selectorInput.value = selector;
+
+            const inspectBtn = document.getElementById('inspect-container-btn');
+            if (inspectBtn) {
+                inspectBtn.style.backgroundColor = 'var(--surface)';
+                inspectBtn.style.borderColor = 'var(--border)';
+                inspectBtn.innerText = '🔍';
+            }
+        } else if (fieldId === 'next-button-selector') {
             const selectorInput = document.getElementById('next-button-selector');
             if (selectorInput) selectorInput.value = selector;
 

@@ -131,6 +131,15 @@
             </div>
 
             <div class="card">
+                <label style="color: var(--primary);">Container-Child Scoped Extraction (Optional)</label>
+                <div style="font-size: 11px; color: var(--text-muted); margin-bottom: 8px;">If scraping a list/grid, enter the selector for the repeating item card. The data fields below will be extracted relative to this container.</div>
+                <div style="display: flex; gap: 8px;">
+                    <button class="inspect-btn" id="inspect-container-btn" title="Inspect Container" style="flex-shrink: 0;">🔍</button>
+                    <input type="text" id="item-container-selector" placeholder="CSS or XPath for repeating Item Container (e.g. .product-card)" style="margin-bottom: 0;" />
+                </div>
+            </div>
+
+            <div class="card">
                 <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
                     <label style="margin: 0;">Data Fields to Extract</label>
                     <div style="display: flex; gap: 8px;">

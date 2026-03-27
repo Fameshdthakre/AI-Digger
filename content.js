@@ -529,19 +529,24 @@ function waitForElement(selector, timeoutMs = 15000) {
     });
 }
 
-function extractFieldData(field) {
+function extractFieldData(field, contextNode = document) {
     if (field.type === 'ai') return null; // AI handled in background
 
     try {
         let elements = [];
 
         if (field.type === 'xpath') {
-            const xpathResult = document.evaluate(field.selector, document, null, XPathResult.ORDERED_NODE_SNAPSHOT_TYPE, null);
+            // If we are searching within a context node, ensure the xpath is relative
+            let selector = field.selector;
+            if (contextNode !== document && selector.startsWith('//')) {
+                selector = '.' + selector;
+            }
+            const xpathResult = document.evaluate(selector, contextNode, null, XPathResult.ORDERED_NODE_SNAPSHOT_TYPE, null);
             for (let i = 0; i < xpathResult.snapshotLength; i++) {
                 elements.push(xpathResult.snapshotItem(i));
             }
         } else {
-            elements = Array.from(document.querySelectorAll(field.selector));
+            elements = Array.from(contextNode.querySelectorAll(field.selector));
         }
 
         if (elements.length === 0) {
@@ -578,38 +583,82 @@ function extractFieldData(field) {
 }
 
 function executeExtraction(blueprint) {
-    const result = {};
+    let result = {};
+    let needsAi = false;
+    let failedFieldsGlobal = [];
+
+    // Helper to process a single row given a context node
+    const processRow = (contextNode) => {
+        const row = {};
+        blueprint.fields.forEach(field => {
+            if (field.type === 'ai') {
+                needsAi = true;
+                return;
+            }
+            row[field.name] = extractFieldData(field, contextNode);
+
+            // Capture failures for potential self-healing
+            if (!row[field.name] || (Array.isArray(row[field.name]) && row[field.name].length === 0)) {
+                // Ensure we only track unique failed fields
+                if (!failedFieldsGlobal.some(f => f.name === field.name)) {
+                    failedFieldsGlobal.push(field);
+                    needsAi = true;
+                }
+            }
+        });
+        return row;
+    };
+
+    if (blueprint.containerSelector) {
+        // CONTAINER MODEL
+        result['items'] = [];
+        let containers = [];
+        try {
+            // Attempt to query containers (supporting basic xpath or css)
+            if (blueprint.containerSelector.startsWith('//') || blueprint.containerSelector.startsWith('(')) {
+                const xpathRes = document.evaluate(blueprint.containerSelector, document, null, XPathResult.ORDERED_NODE_SNAPSHOT_TYPE, null);
+                for (let i = 0; i < xpathRes.snapshotLength; i++) {
+                    containers.push(xpathRes.snapshotItem(i));
+                }
+            } else {
+                containers = Array.from(document.querySelectorAll(blueprint.containerSelector));
+            }
+        } catch(e) {
+            console.error("Container selector failed", e);
+        }
+
+        if (containers.length > 0) {
+            containers.forEach(container => {
+                result['items'].push(processRow(container));
+            });
+        } else {
+            // If container fails, still process Document as fallback but flag it
+            result['items'].push(processRow(document));
+        }
+
+    } else {
+        // STANDARD MODEL (Single Page / Flat mapping)
+        result = processRow(document);
+    }
+
+    // Attach Meta Data
     result['URL'] = window.location.href;
     result['Timestamp'] = new Date().toISOString();
 
-    let needsAi = false;
-
-    blueprint.fields.forEach(field => {
-        if (field.type === 'ai') {
-            needsAi = true;
-            return;
-        }
-        result[field.name] = extractFieldData(field);
-
-        // Also capture failures for potential self-healing
-        if (!result[field.name] || (Array.isArray(result[field.name]) && result[field.name].length === 0)) {
-            if (!result['_failedFields']) result['_failedFields'] = [];
-            result['_failedFields'].push(field);
-            needsAi = true; // Turn on AI mode for self-healing
-        }
-    });
+    if (failedFieldsGlobal.length > 0) {
+        result['_failedFields'] = failedFieldsGlobal;
+    }
 
     if (needsAi) {
         // Use Turndown to convert DOM to Markdown
         try {
             const turndownService = new TurndownService({ headingStyle: 'atx', codeBlockStyle: 'fenced' });
-            // Remove noise tags like script and style before converting
             const clone = document.body.cloneNode(true);
             const scripts = clone.querySelectorAll('script, style, noscript, svg, iframe');
             scripts.forEach(s => s.remove());
             result['_pageMarkdown'] = turndownService.turndown(clone.innerHTML);
         } catch (err) {
-            console.error("Turndown failed, falling back to innerText", err);
+            console.error("Turndown failed", err);
             result['_pageMarkdown'] = document.body.innerText.trim();
         }
     }
