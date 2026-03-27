@@ -26,6 +26,41 @@ enableScrolls.addEventListener('change', (e) => {
     scrollsContainer.style.display = e.target.checked ? 'block' : 'none';
 });
 
+// Test Container Button
+document.getElementById('test-container-btn').addEventListener('click', async () => {
+    const selectorInput = document.getElementById('item-container-selector');
+    if (!selectorInput.value) return;
+
+    const testBtn = document.getElementById('test-container-btn');
+    const previewBox = document.getElementById('container-preview-box');
+
+    testBtn.innerText = '⏳';
+    const fieldData = {
+        name: 'Container Test',
+        selector: selectorInput.value,
+        type: 'css',
+        extractType: 'count' // Special extract type handled in content script
+    };
+
+    const [tab] = await chrome.tabs.query({active: true, currentWindow: true});
+    await chrome.scripting.executeScript({
+        target: { tabId: tab.id },
+        files: ['turndown.js', 'content.js']
+    }).catch(err => console.error("Failed to inject content.js:", err));
+
+    chrome.tabs.sendMessage(tab.id, { action: 'TEST_SELECTOR', field: fieldData }, (response) => {
+        testBtn.innerText = '🧪';
+        previewBox.style.display = 'block';
+        if (response && response.result !== undefined && response.result > 0) {
+            previewBox.style.color = '#10b981';
+            previewBox.innerText = `Found ${response.result} matching containers.`;
+        } else {
+            previewBox.style.color = '#ef4444';
+            previewBox.innerText = "No containers found.";
+        }
+    });
+});
+
 // Inspect Container Button
 document.getElementById('inspect-container-btn').addEventListener('click', async () => {
     const [tab] = await chrome.tabs.query({active: true, currentWindow: true});
@@ -40,6 +75,41 @@ document.getElementById('inspect-container-btn').addEventListener('click', async
             btn.style.backgroundColor = '#e0f2fe';
             btn.style.borderColor = '#3b82f6';
             btn.innerText = '🎯';
+        }
+    });
+});
+
+// Test Next Button
+document.getElementById('test-next-btn').addEventListener('click', async () => {
+    const selectorInput = document.getElementById('next-button-selector');
+    if (!selectorInput.value) return;
+
+    const testBtn = document.getElementById('test-next-btn');
+    const previewBox = document.getElementById('next-preview-box');
+
+    testBtn.innerText = '⏳';
+    const fieldData = {
+        name: 'Next Button Test',
+        selector: selectorInput.value,
+        type: 'css',
+        extractType: 'exists'
+    };
+
+    const [tab] = await chrome.tabs.query({active: true, currentWindow: true});
+    await chrome.scripting.executeScript({
+        target: { tabId: tab.id },
+        files: ['turndown.js', 'content.js']
+    }).catch(err => console.error("Failed to inject content.js:", err));
+
+    chrome.tabs.sendMessage(tab.id, { action: 'TEST_SELECTOR', field: fieldData }, (response) => {
+        testBtn.innerText = '🧪';
+        previewBox.style.display = 'block';
+        if (response && response.result) {
+            previewBox.style.color = '#10b981';
+            previewBox.innerText = "Next button found!";
+        } else {
+            previewBox.style.color = '#ef4444';
+            previewBox.innerText = "Next button not found.";
         }
     });
 });
@@ -76,6 +146,9 @@ function addFieldRow(name = '', selector = '', type = 'css', extractType = 'text
     div.id = fieldId;
     div.innerHTML = `
         <div class="field-row-top">
+            <label class="checkbox-label" style="width: auto; margin-right: 4px;" title="Set as Primary Key">
+                <input type="radio" name="primary-key-radio" class="f-primary-key" ${fieldCount === 1 ? 'checked' : ''} /> PK
+            </label>
             <input type="text" placeholder="Field Name" class="f-name" value="${name}" style="flex: 1;" />
             <select class="f-type" style="width: 100px;">
                 <option value="css" ${type === 'css' ? 'selected' : ''}>CSS</option>
@@ -232,11 +305,13 @@ function addActionRow(type = 'click', selector = '', text = '') {
                 <option value="type" ${type === 'type' ? 'selected' : ''}>Type Text</option>
                 <option value="wait" ${type === 'wait' ? 'selected' : ''}>Wait For</option>
             </select>
-            <button class="inspect-btn a-inspect" title="Inspect Selector">🔍</button>
+            <button class="inspect-btn a-inspect" title="Inspect Selector" style="flex-shrink: 0;">🔍</button>
+            <button class="test-btn a-test" title="Test Action" style="flex-shrink: 0;">🧪</button>
             <input type="text" placeholder="CSS or XPath Selector" class="a-selector" value="${selector}" style="flex: 1;" />
             <input type="text" placeholder="Text to type" class="a-text" value="${text}" style="width: 120px; ${type === 'type' ? '' : 'display: none;'}" />
             <button class="remove-field" style="position: static;" title="Remove Action">🗑️</button>
         </div>
+        <div class="preview-box a-preview" style="margin-top: 8px;"></div>
     `;
 
     div.querySelector('.remove-field').addEventListener('click', () => div.remove());
@@ -244,9 +319,43 @@ function addActionRow(type = 'click', selector = '', text = '') {
     const typeSelect = div.querySelector('.a-type');
     const textInput = div.querySelector('.a-text');
     const inspectBtn = div.querySelector('.a-inspect');
+    const testBtn = div.querySelector('.a-test');
+    const selectorInput = div.querySelector('.a-selector');
+    const previewBox = div.querySelector('.a-preview');
 
     typeSelect.addEventListener('change', (e) => {
         textInput.style.display = e.target.value === 'type' ? 'block' : 'none';
+    });
+
+    testBtn.addEventListener('click', async () => {
+        if (!selectorInput.value) return;
+
+        testBtn.innerText = '⏳';
+        const fieldData = {
+            name: 'Action Test',
+            selector: selectorInput.value,
+            type: 'css', // Let content script guess based on selector shape
+            extractType: 'exists'
+        };
+
+        const [tab] = await chrome.tabs.query({active: true, currentWindow: true});
+
+        await chrome.scripting.executeScript({
+            target: { tabId: tab.id },
+            files: ['turndown.js', 'content.js']
+        }).catch(err => console.error("Failed to inject content.js:", err));
+
+        chrome.tabs.sendMessage(tab.id, { action: 'TEST_SELECTOR', field: fieldData }, (response) => {
+            testBtn.innerText = '🧪';
+            previewBox.style.display = 'block';
+            if (response && response.result) {
+                previewBox.style.color = '#10b981';
+                previewBox.innerText = "Element found!";
+            } else {
+                previewBox.style.color = '#ef4444';
+                previewBox.innerText = "Element not found.";
+            }
+        });
     });
 
     inspectBtn.addEventListener('click', async () => {
@@ -504,9 +613,25 @@ chrome.storage.local.get(['savedJobs'], (result) => {
 });
 
 function getBlueprintFromUI() {
+    let primaryKeyField = null;
+    const pkRadios = document.querySelectorAll('.f-primary-key');
+    pkRadios.forEach((radio, index) => {
+        if (radio.checked) {
+            const row = radio.closest('.field-row');
+            primaryKeyField = row.querySelector('.f-name').value;
+        }
+    });
+
+    // Fallback if none checked
+    if (!primaryKeyField && pkRadios.length > 0) {
+        primaryKeyField = pkRadios[0].closest('.field-row').querySelector('.f-name').value;
+    }
+
     return {
         jobName: document.getElementById('job-name').value,
         scrapingType: document.getElementById('scrape-mode').value,
+        outputFormat: document.getElementById('output-format').value,
+        primaryKeyField: primaryKeyField,
         urls: document.getElementById('url-list').value,
         webhookUrl: document.getElementById('webhook-url').value,
         containerSelector: document.getElementById('item-container-selector').value,
@@ -581,6 +706,9 @@ document.getElementById('saved-jobs-select').addEventListener('change', (e) => {
     document.getElementById('job-name').value = blueprint.jobName;
     document.getElementById('scrape-mode').value = blueprint.scrapingType;
     document.getElementById('scrape-mode').dispatchEvent(new Event('change'));
+    if (blueprint.outputFormat) {
+        document.getElementById('output-format').value = blueprint.outputFormat;
+    }
     document.getElementById('url-list').value = blueprint.urls || '';
     document.getElementById('webhook-url').value = blueprint.webhookUrl || '';
     document.getElementById('item-container-selector').value = blueprint.containerSelector || '';
@@ -624,6 +752,12 @@ document.getElementById('saved-jobs-select').addEventListener('change', (e) => {
             const newRow = fieldsContainer.lastElementChild;
             const cb = newRow.querySelector('.f-multiple');
             if (cb) cb.checked = f.multiple || false;
+
+            // Set primary key
+            if (blueprint.primaryKeyField === f.name) {
+                const pkRadio = newRow.querySelector('.f-primary-key');
+                if (pkRadio) pkRadio.checked = true;
+            }
         });
     } else {
         loadDefaultFields();

@@ -408,33 +408,48 @@ function saveExtractedData(data) {
     }
     // CASE 2: Flat Model / Legacy (Returns an object with parallel arrays)
     else {
-        let maxArrayLength = 0;
-        const arrayFields = [];
-        const scalarFields = [];
-
-        for (const [key, value] of Object.entries(data)) {
-            if (Array.isArray(value)) {
-                arrayFields.push(key);
-                if (value.length > maxArrayLength) maxArrayLength = value.length;
-            } else {
-                scalarFields.push(key);
-            }
-        }
-
-        if (maxArrayLength > 0) {
-            // Unpivot arrays into individual rows
-            for (let i = 0; i < maxArrayLength; i++) {
-                const row = {};
-                scalarFields.forEach(key => row[key] = data[key]);
-                arrayFields.forEach(key => {
-                    // Prevent "undefined" text strings
-                    row[key] = data[key][i] !== undefined ? data[key][i] : "";
-                });
-                rowsToSave.push(row);
-            }
-        } else {
-            // No arrays found, it's just a single flat object
+        // Output Format Grouped
+        if (currentJob?.outputFormat === 'grouped') {
+            if (data.URL) data['URL'] = data.URL;
+            if (data.Timestamp) data['Timestamp'] = data.Timestamp;
             rowsToSave.push(data);
+        }
+        // Output Format Flat (Default/Strict Row Column)
+        else {
+            let maxArrayLength = 0;
+            const arrayFields = [];
+            const scalarFields = [];
+
+            for (const [key, value] of Object.entries(data)) {
+                if (Array.isArray(value)) {
+                    arrayFields.push(key);
+                    if (value.length > maxArrayLength) maxArrayLength = value.length;
+                } else {
+                    scalarFields.push(key);
+                }
+            }
+
+            // Determine Primary Key length constraint
+            let rowCount = maxArrayLength;
+            if (currentJob?.primaryKeyField && Array.isArray(data[currentJob.primaryKeyField])) {
+                rowCount = data[currentJob.primaryKeyField].length;
+            }
+
+            if (rowCount > 0) {
+                // Unpivot arrays into individual rows up to the rowCount
+                for (let i = 0; i < rowCount; i++) {
+                    const row = {};
+                    scalarFields.forEach(key => row[key] = data[key]);
+                    arrayFields.forEach(key => {
+                        // Prevent "undefined" text strings
+                        row[key] = data[key][i] !== undefined ? data[key][i] : "";
+                    });
+                    rowsToSave.push(row);
+                }
+            } else {
+                // No arrays found, it's just a single flat object
+                rowsToSave.push(data);
+            }
         }
     }
 

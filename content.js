@@ -650,6 +650,14 @@ function extractFieldData(field, contextNode = document) {
             } catch(e) {}
         }
 
+        if (field.extractType === 'count') {
+            return elements.length;
+        }
+
+        if (field.extractType === 'exists') {
+            return elements.length > 0;
+        }
+
         if (elements.length === 0) {
             return field.multiple ? [] : null;
         }
