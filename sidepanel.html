@@ -192,6 +192,12 @@
 
         <!-- RUN & EXPORT VIEW -->
         <div id="view-run" class="view">
+            <div class="card mb-4">
+                <label>Webhook URL (Streaming Post)</label>
+                <div style="font-size: 11px; color: var(--text-muted); margin-bottom: 8px;">Leave blank to disable. Unpivoted rows will be POSTed instantly to this URL.</div>
+                <input type="url" id="webhook-url" placeholder="https://api.zapier.com/... or https://make.com/..." />
+            </div>
+
             <div class="stat-box mb-4">
                 <label>Rows Scraped</label>
                 <div class="stat-number" id="stat-count">0</div>

@@ -10,6 +10,17 @@ let isRunning = false;
 let jobLogs = [];
 let jobProgress = { current: 0, total: 0 };
 
+// Restore job state on service worker startup if a job was running
+chrome.storage.local.get(['jobState', 'jobLogs', 'jobProgress'], (res) => {
+    if (res.jobState && res.jobState.isRunning) {
+        currentJob = res.jobState.blueprint;
+        isRunning = true;
+        if (res.jobLogs) jobLogs = res.jobLogs;
+        if (res.jobProgress) jobProgress = res.jobProgress;
+        addLog("Service Worker woke up. Resuming job...");
+    }
+});
+
 // Allow users to open the side panel by clicking the action toolbar icon
 chrome.sidePanel.setPanelBehavior({ openPanelOnActionClick: true }).catch((error) => console.error(error));
 
@@ -20,6 +31,8 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         sendResponse({ status: 'started' });
     } else if (message.action === 'STOP_JOB') {
         isRunning = false;
+        chrome.alarms.clear("nextJobStep");
+        chrome.storage.local.remove('jobState');
         addLog("Job stopped by user.");
         sendResponse({ status: 'stopped' });
     } else if (message.action === 'GET_STATUS') {
@@ -56,122 +69,187 @@ function addLog(message) {
     const timestamp = new Date().toLocaleTimeString();
     jobLogs.push(`[${timestamp}] ${message}`);
     if (jobLogs.length > 100) jobLogs.shift(); // Keep last 100 logs
+    chrome.storage.local.set({ jobLogs, jobProgress });
 }
+
+// Alarm listener to wake up background script and process next URL/Page
+chrome.alarms.onAlarm.addListener((alarm) => {
+    if (alarm.name === "nextJobStep") {
+        processNextStep();
+    }
+});
 
 async function startJob(blueprint) {
     currentJob = blueprint;
     isRunning = true;
     jobLogs = [];
     addLog(`Started job: ${blueprint.jobName}`);
+
+    let state = {
+        isRunning: true,
+        blueprint: blueprint,
+        batchCounter: 0
+    };
     
     if (blueprint.scrapingType === 'multi-url') {
-        let urlsToScrape = blueprint.urls ? blueprint.urls.split('\n').map(u => u.trim()).filter(u => u) : [];
-        jobProgress.total = urlsToScrape.length;
-        let batchCounter = 0;
+        state.urlsToScrape = blueprint.urls ? blueprint.urls.split('\n').map(u => u.trim()).filter(u => u) : [];
+        state.currentIndex = 0;
+        jobProgress.total = state.urlsToScrape.length;
+    } else if (blueprint.scrapingType === 'single-page') {
+        state.maxPages = blueprint.singlePageOptions?.maxPages || 1;
+        state.currentPage = 1;
+        jobProgress.total = state.maxPages;
 
-        for (let i = 0; i < urlsToScrape.length; i++) {
-            if (!isRunning) break; // Stop if user cancelled
+        // Ensure active tab logic
+        let [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+        state.tabId = tab.id;
+    }
 
-            const url = urlsToScrape[i];
-            jobProgress.current = i + 1;
-            addLog(`Scraping URL ${i + 1}/${urlsToScrape.length}: ${url}`);
+    await chrome.storage.local.set({ jobState: state });
+    processNextStep();
+}
 
-            try {
-                let tab = await createOrUpdateTab(url);
-                await sleep(2000);
+async function processNextStep() {
+    const res = await chrome.storage.local.get(['jobState']);
+    // Removed the memory-only `!isRunning` check to prevent race conditions
+    // when the Service Worker wakes up via alarm before the top-level
+    // chrome.storage.local.get callback can set isRunning = true.
+    if (!res.jobState || !res.jobState.isRunning) {
+        addLog("Job completed or stopped.");
+        isRunning = false;
+        currentJob = null;
+        chrome.storage.local.remove('jobState');
+        return;
+    }
 
-                await ensureScriptInjected(tab.id);
+    // Ensure memory state is synced with storage state in case of SW wake
+    isRunning = true;
+    currentJob = res.jobState.blueprint;
 
-                await executeActions(tab.id, currentJob.actions);
+    let state = res.jobState;
+    const blueprint = state.blueprint;
 
-                let extractedData = await scrapeTab(tab.id, currentJob, url);
-                if (extractedData) saveExtractedData(extractedData);
+    if (blueprint.scrapingType === 'multi-url') {
+        if (state.currentIndex >= state.urlsToScrape.length) {
+            completeJob();
+            return;
+        }
 
-                batchCounter++;
-                let delayMs = getRandomDelay(blueprint.antiBot.minDelayMs, blueprint.antiBot.maxDelayMs);
+        const url = state.urlsToScrape[state.currentIndex];
+        jobProgress.current = state.currentIndex + 1;
+        addLog(`Scraping URL ${jobProgress.current}/${state.urlsToScrape.length}: ${url}`);
 
-                if (blueprint.antiBot.batchSize > 0 && batchCounter >= blueprint.antiBot.batchSize) {
-                    addLog(`Batch size reached. Pausing for ${blueprint.antiBot.batchPauseMs}ms`);
-                    delayMs = blueprint.antiBot.batchPauseMs;
-                    batchCounter = 0;
-                }
+        try {
+            let tab = await createOrUpdateTab(url);
+            await sleep(2000);
 
-                if (i < urlsToScrape.length - 1 && isRunning) {
-                    addLog(`Waiting ${delayMs}ms before next URL...`);
-                    await sleep(delayMs);
-                }
+            await ensureScriptInjected(tab.id);
+            await executeActions(tab.id, blueprint.actions);
 
-            } catch (error) {
-                addLog(`ERROR: Failed to load or scrape ${url}: ${error.message}`);
+            let extractedData = await scrapeTab(tab.id, blueprint, url);
+            if (extractedData) saveExtractedData(extractedData);
+
+            state.batchCounter++;
+            let delayMs = getRandomDelay(blueprint.antiBot.minDelayMs, blueprint.antiBot.maxDelayMs);
+
+            if (blueprint.antiBot.batchSize > 0 && state.batchCounter >= blueprint.antiBot.batchSize) {
+                addLog(`Batch size reached. Pausing for ${blueprint.antiBot.batchPauseMs}ms`);
+                delayMs = blueprint.antiBot.batchPauseMs;
+                state.batchCounter = 0;
             }
+
+            state.currentIndex++;
+            await chrome.storage.local.set({ jobState: state });
+
+            if (state.currentIndex < state.urlsToScrape.length) {
+                addLog(`Waiting ${delayMs}ms before next URL...`);
+                // Schedule next step using Alarms to survive Service Worker termination
+                chrome.alarms.create("nextJobStep", { when: Date.now() + delayMs });
+            } else {
+                completeJob();
+            }
+
+        } catch (error) {
+            addLog(`ERROR: Failed to load or scrape ${url}: ${error.message}`);
+            state.currentIndex++;
+            await chrome.storage.local.set({ jobState: state });
+            chrome.alarms.create("nextJobStep", { when: Date.now() + 1000 }); // Retry next quickly
         }
     } else if (blueprint.scrapingType === 'single-page') {
-        let [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+        if (state.currentPage > state.maxPages) {
+            completeJob();
+            return;
+        }
 
-        let maxPages = blueprint.singlePageOptions?.maxPages || 1;
-        jobProgress.total = maxPages;
+        jobProgress.current = state.currentPage;
+        addLog(`Scraping Page ${state.currentPage} of ${state.maxPages}...`);
 
-        await ensureScriptInjected(tab.id);
+        let tabId = state.tabId;
 
-        await executeActions(tab.id, blueprint.actions);
+        try {
+            await ensureScriptInjected(tabId);
+            if (state.currentPage === 1) await executeActions(tabId, blueprint.actions);
 
-        // Ensure there is at least one CSS/XPath field to wait for to determine page loaded
-        const firstSelectorField = blueprint.fields.find(f => f.type !== 'ai');
-
-        for (let page = 1; page <= maxPages; page++) {
-            if (!isRunning) break;
-            jobProgress.current = page;
-            addLog(`Scraping Page ${page} of ${maxPages}...`);
-
-            // Smart Wait: Wait for the first configured element to appear in DOM before extracting
+            const firstSelectorField = blueprint.fields.find(f => f.type !== 'ai');
             if (firstSelectorField) {
                 addLog(`Waiting for ${firstSelectorField.name} to appear...`);
-                const waitRes = await chrome.tabs.sendMessage(tab.id, { action: 'WAIT_FOR_ELEMENT', selector: firstSelectorField.selector }).catch(()=>null);
-                if (waitRes && waitRes.status === 'timeout') {
-                    addLog(`Timeout waiting for element. Continuing anyway.`);
-                }
+                const waitRes = await chrome.tabs.sendMessage(tabId, { action: 'WAIT_FOR_ELEMENT', selector: firstSelectorField.selector }).catch(()=>null);
+                if (waitRes && waitRes.status === 'timeout') addLog(`Timeout waiting for element. Continuing anyway.`);
             } else {
-                await sleep(2000); // fallback
+                await sleep(2000);
             }
 
-            // Infinite Scroll Logic
             if (blueprint.singlePageOptions?.infiniteScroll) {
                 let maxScrolls = blueprint.singlePageOptions.maxScrolls || 5;
                 addLog(`Scrolling ${maxScrolls} times...`);
                 for (let s = 0; s < maxScrolls; s++) {
-                    if (!isRunning) break;
-                    await chrome.tabs.sendMessage(tab.id, { action: 'SCROLL_BOTTOM' }).catch(()=>null);
+                    if (!isRunning) return;
+                    await chrome.tabs.sendMessage(tabId, { action: 'SCROLL_BOTTOM' }).catch(()=>null);
                     await sleep(getRandomDelay(blueprint.antiBot.minDelayMs, blueprint.antiBot.maxDelayMs));
                 }
             }
 
-            let extractedData = await scrapeTab(tab.id, currentJob, tab.url);
+            let [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+            let extractedData = await scrapeTab(tabId, blueprint, tab.url);
             if (extractedData) saveExtractedData(extractedData);
 
-            if (page < maxPages && isRunning) {
+            if (state.currentPage < state.maxPages) {
                 let nextSelector = blueprint.singlePageOptions?.nextButtonSelector;
                 if (!nextSelector) {
                     addLog("No 'Next Button' selector provided. Stopping pagination.");
-                    break;
+                    completeJob();
+                    return;
                 }
 
                 addLog(`Clicking next page...`);
-                let clickRes = await chrome.tabs.sendMessage(tab.id, { action: 'CLICK_NEXT', selector: nextSelector }).catch(()=>null);
+                let clickRes = await chrome.tabs.sendMessage(tabId, { action: 'CLICK_NEXT', selector: nextSelector }).catch(()=>null);
 
                 if (!clickRes || clickRes.status === 'not_found') {
                     addLog("Next button not found. Reached end of pagination.");
-                    break;
+                    completeJob();
+                    return;
                 }
 
-                // Re-inject script in case page navigation cleared it (with retry wrapper)
-                await sleep(1000);
-                await ensureScriptInjected(tab.id);
+                let delayMs = getRandomDelay(blueprint.antiBot.minDelayMs, blueprint.antiBot.maxDelayMs);
+                state.currentPage++;
+                await chrome.storage.local.set({ jobState: state });
+
+                addLog(`Waiting ${delayMs}ms before next page...`);
+                chrome.alarms.create("nextJobStep", { when: Date.now() + delayMs + 2000 });
+            } else {
+                completeJob();
             }
+        } catch (err) {
+            addLog(`ERROR: Single page scrape failed: ${err.message}`);
+            completeJob();
         }
     }
-    
+}
+
+function completeJob() {
     isRunning = false;
     currentJob = null;
+    chrome.storage.local.remove('jobState');
     addLog("Job completed!");
 }
 
@@ -179,7 +257,7 @@ async function ensureScriptInjected(tabId) {
     try {
         await chrome.scripting.executeScript({
             target: { tabId: tabId },
-            files: ['content.js']
+            files: ['turndown.js', 'content.js']
         });
     } catch (err) {
         addLog(`Note: content script inject err (may already exist)`);
@@ -212,15 +290,67 @@ async function scrapeTab(tabId, job, url) {
         return null;
     });
 
-    if (extractedData && extractedData._pageText) {
-        addLog("Processing AI extraction...");
-        try {
-            const aiExtracted = await processAIExtraction(job, extractedData._pageText);
-            delete extractedData._pageText;
-            extractedData = { ...extractedData, ...aiExtracted };
-        } catch (e) {
-            addLog(`AI Extraction failed: ${e.message}`);
+    if (extractedData && extractedData._pageMarkdown) {
+        // Handle Self-Healing first
+        if (extractedData._failedFields && extractedData._failedFields.length > 0) {
+            addLog(`Attempting self-healing for ${extractedData._failedFields.length} failed fields...`);
+            try {
+                const healedData = await processSelfHealing(job, extractedData._failedFields, extractedData._pageMarkdown);
+                extractedData = { ...extractedData, ...healedData.recoveredValues };
+
+                // Update job blueprint locally
+                if (healedData.updatedFields.length > 0) {
+                    const savedJobsObj = await chrome.storage.local.get(['savedJobs']);
+                    let savedJobs = savedJobsObj.savedJobs || {};
+                    let jobNeedsUpdate = false;
+
+                    healedData.updatedFields.forEach(healedF => {
+                        // Update the running job immediately to prevent re-healing on next URL
+                        const currentIdx = currentJob.fields.findIndex(f => f.name === healedF.name);
+                        if (currentIdx !== -1) {
+                            currentJob.fields[currentIdx].selector = healedF.selector;
+                            addLog(`Healed running selector for ${healedF.name}: ${healedF.selector}`);
+                            jobNeedsUpdate = true;
+                        }
+
+                        // Also update saved profile if applicable
+                        if (savedJobs[job.jobName]) {
+                            const idx = savedJobs[job.jobName].fields.findIndex(f => f.name === healedF.name);
+                            if (idx !== -1) {
+                                savedJobs[job.jobName].fields[idx].selector = healedF.selector;
+                            }
+                        }
+                    });
+
+                    if (jobNeedsUpdate) {
+                        await chrome.storage.local.set({ savedJobs: savedJobs });
+                        // Update the jobState in storage so it persists if the service worker sleeps
+                        const stateRes = await chrome.storage.local.get(['jobState']);
+                        if (stateRes.jobState) {
+                            stateRes.jobState.blueprint = currentJob;
+                            await chrome.storage.local.set({ jobState: stateRes.jobState });
+                        }
+                    }
+                }
+            } catch (e) {
+                addLog(`Self-healing failed: ${e.message}`);
+            }
         }
+
+        // Handle standard AI fields
+        const aiFields = job.fields.filter(f => f.type === 'ai');
+        if (aiFields.length > 0) {
+            addLog("Processing AI extraction...");
+            try {
+                const aiExtracted = await processAIExtraction(job, extractedData._pageMarkdown);
+                extractedData = { ...extractedData, ...aiExtracted };
+            } catch (e) {
+                addLog(`AI Extraction failed: ${e.message}`);
+            }
+        }
+
+        delete extractedData._pageMarkdown;
+        delete extractedData._failedFields;
     }
     return extractedData;
 }
@@ -253,13 +383,28 @@ function saveExtractedData(data) {
                 row[key] = data[key][i] !== undefined ? data[key][i] : null;
             });
             scrapedData.push(row);
+            triggerWebhook(currentJob?.webhookUrl, row);
         }
     } else {
         // No arrays, just push the single row
         scrapedData.push(data);
+        triggerWebhook(currentJob?.webhookUrl, data);
     }
 
     chrome.storage.local.set({ scrapedData: scrapedData });
+}
+
+function triggerWebhook(url, data) {
+    if (!url) return;
+    fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(data)
+    }).then(res => {
+        if (!res.ok) addLog(`Webhook failed: ${res.status} ${res.statusText}`);
+    }).catch(err => {
+        addLog(`Webhook fetch error: ${err.message}`);
+    });
 }
 
 // Helper: AI Extraction Caller
@@ -284,7 +429,7 @@ async function processAIExtraction(blueprint, text) {
 
     // Truncate text to avoid token limits roughly
     const truncatedText = text.substring(0, 30000);
-    prompt += `\n\nSource Text:\n"""\n${truncatedText}\n"""`;
+    prompt += `\n\nSource Markdown:\n"""\n${truncatedText}\n"""`;
 
     let resultJsonStr = "{}";
 
@@ -360,6 +505,97 @@ async function processAIExtraction(blueprint, text) {
     } catch (e) {
         console.error("Failed to parse AI response as JSON", resultJsonStr);
         throw new Error("AI returned invalid JSON.");
+    }
+}
+
+// Helper: Agentic Self-Healing Caller
+async function processSelfHealing(job, failedFields, markdown) {
+    const settingsObj = await chrome.storage.sync.get(['aiSettings']);
+    const settings = settingsObj.aiSettings;
+
+    if (!settings || !settings.aiPlatform) {
+        throw new Error("AI Platform not configured for self-healing.");
+    }
+
+    let prompt = "You are an expert web scraper recovery agent.\n";
+    prompt += "The following data fields failed to match any elements on the page using their current CSS/XPath selectors.\n";
+    prompt += "Given the page Markdown below, find the missing values for these fields, AND suggest a new, resilient CSS selector for them.\n\n";
+    prompt += "Return ONLY a valid JSON object with two keys:\n";
+    prompt += "- 'recoveredValues': { \"FieldName\": \"ExtractedValue\" }\n";
+    prompt += "- 'updatedFields': [ { \"name\": \"FieldName\", \"selector\": \"new.css.selector\" } ]\n\n";
+    prompt += "Failed Fields:\n";
+    failedFields.forEach(f => {
+        prompt += `- Name: "${f.name}", Old Selector: "${f.selector}"\n`;
+    });
+
+    const truncatedText = markdown.substring(0, 30000);
+    prompt += `\n\nPage Markdown:\n"""\n${truncatedText}\n"""`;
+
+    let resultJsonStr = "{}";
+
+    if (settings.aiPlatform === 'openai') {
+        const apiKey = settings.openai.key;
+        const model = settings.openai.model || 'gpt-4o';
+        const response = await fetch('https://api.openai.com/v1/chat/completions', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${apiKey}` },
+            body: JSON.stringify({
+                model: model,
+                messages: [{ role: "user", content: prompt }],
+                temperature: 0.1,
+                response_format: { type: "json_object" }
+            })
+        });
+        if (!response.ok) throw new Error(`OpenAI API error: ${response.statusText}`);
+        const data = await response.json();
+        resultJsonStr = data.choices[0].message.content;
+
+    } else if (settings.aiPlatform === 'gemini') {
+        const apiKey = settings.gemini.key;
+        const model = settings.gemini.model || 'gemini-2.5-flash';
+        const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                contents: [{ parts: [{ text: prompt }] }],
+                generationConfig: { responseMimeType: "application/json" }
+            })
+        });
+        if (!response.ok) throw new Error(`Gemini API error: ${response.statusText}`);
+        const data = await response.json();
+        resultJsonStr = data.candidates[0].content.parts[0].text;
+
+    } else if (settings.aiPlatform === 'claude') {
+        const apiKey = settings.claude.key;
+        const model = settings.claude.model || 'claude-3-5-sonnet-20241022';
+        const response = await fetch('https://api.anthropic.com/v1/messages', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'x-api-key': apiKey,
+                'anthropic-version': '2023-06-01'
+            },
+            body: JSON.stringify({
+                model: model,
+                max_tokens: 1024,
+                messages: [{ role: "user", content: prompt }]
+            })
+        });
+        if (!response.ok) throw new Error(`Claude API error: ${response.statusText}`);
+        const data = await response.json();
+        resultJsonStr = data.content[0].text;
+    }
+
+    try {
+        const cleanStr = resultJsonStr.replace(/^```json/i, '').replace(/```$/, '').trim();
+        const parsed = JSON.parse(cleanStr);
+        return {
+            recoveredValues: parsed.recoveredValues || {},
+            updatedFields: parsed.updatedFields || []
+        };
+    } catch (e) {
+        console.error("Failed to parse Self-Healing response as JSON", resultJsonStr);
+        throw new Error("AI returned invalid JSON during recovery.");
     }
 }
 

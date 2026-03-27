@@ -66,7 +66,15 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         sendResponse({ result: result });
     }
     else if (message.action === 'GET_PAGE_TEXT') {
-        sendResponse({ text: document.body.innerText.trim() });
+        try {
+            const turndownService = new TurndownService({ headingStyle: 'atx', codeBlockStyle: 'fenced' });
+            const clone = document.body.cloneNode(true);
+            const scripts = clone.querySelectorAll('script, style, noscript, svg, iframe');
+            scripts.forEach(s => s.remove());
+            sendResponse({ text: turndownService.turndown(clone.innerHTML) });
+        } catch (e) {
+            sendResponse({ text: document.body.innerText.trim() });
+        }
     }
     else if (message.action === 'EXECUTE_ACTION') {
         executeAction(message.actionData).then(result => {
@@ -535,11 +543,28 @@ function executeExtraction(blueprint) {
             return;
         }
         result[field.name] = extractFieldData(field);
+
+        // Also capture failures for potential self-healing
+        if (!result[field.name] || (Array.isArray(result[field.name]) && result[field.name].length === 0)) {
+            if (!result['_failedFields']) result['_failedFields'] = [];
+            result['_failedFields'].push(field);
+            needsAi = true; // Turn on AI mode for self-healing
+        }
     });
 
     if (needsAi) {
-        // Send page text back as a special field
-        result['_pageText'] = document.body.innerText.trim();
+        // Use Turndown to convert DOM to Markdown
+        try {
+            const turndownService = new TurndownService({ headingStyle: 'atx', codeBlockStyle: 'fenced' });
+            // Remove noise tags like script and style before converting
+            const clone = document.body.cloneNode(true);
+            const scripts = clone.querySelectorAll('script, style, noscript, svg, iframe');
+            scripts.forEach(s => s.remove());
+            result['_pageMarkdown'] = turndownService.turndown(clone.innerHTML);
+        } catch (err) {
+            console.error("Turndown failed, falling back to innerText", err);
+            result['_pageMarkdown'] = document.body.innerText.trim();
+        }
     }
 
     return result;
