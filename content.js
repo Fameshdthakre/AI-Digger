@@ -76,6 +76,14 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
             sendResponse({ text: document.body.innerText.trim() });
         }
     }
+    else if (message.action === 'TOGGLE_MACRO_RECORDING') {
+        if (message.isRecording) {
+            startMacroRecording();
+        } else {
+            stopMacroRecording();
+        }
+        sendResponse({ status: 'toggled' });
+    }
     else if (message.action === 'EXECUTE_ACTION') {
         executeAction(message.actionData).then(result => {
             sendResponse({ status: result ? 'success' : 'failed' });
@@ -116,6 +124,45 @@ async function executeAction(actionData) {
     }
 
     return false;
+}
+
+// ==========================================
+// PHASE 1.5: MACRO RECORDER LOGIC
+// ==========================================
+
+let isRecordingMacro = false;
+
+function startMacroRecording() {
+    isRecordingMacro = true;
+    document.addEventListener('click', handleMacroClick, { capture: true });
+    document.addEventListener('change', handleMacroChange, { capture: true });
+    console.log("Macro recording started.");
+}
+
+function stopMacroRecording() {
+    isRecordingMacro = false;
+    document.removeEventListener('click', handleMacroClick, { capture: true });
+    document.removeEventListener('change', handleMacroChange, { capture: true });
+    console.log("Macro recording stopped.");
+}
+
+function handleMacroClick(e) {
+    if (!isRecordingMacro) return;
+    // DO NOT prevent default. Let the user interact naturally.
+    const selector = generateCssSelector(e.target);
+    chrome.runtime.sendMessage({
+        action: 'MACRO_ACTION_RECORDED',
+        data: { type: 'click', selector: selector }
+    });
+}
+
+function handleMacroChange(e) {
+    if (!isRecordingMacro) return;
+    const selector = generateCssSelector(e.target);
+    chrome.runtime.sendMessage({
+        action: 'MACRO_ACTION_RECORDED',
+        data: { type: 'type', selector: selector, text: e.target.value }
+    });
 }
 
 // ==========================================

@@ -84,6 +84,13 @@
         
         <!-- BUILD VIEW -->
         <div id="view-build" class="view active">
+            <div class="card" style="background: #fdf4ff; border-color: #e879f9;">
+                <label style="color: #c026d3;">✨ Magic Build (Chat-to-Scrape)</label>
+                <div style="font-size: 11px; color: var(--text-muted); margin-bottom: 8px;">Describe what you want to extract and let AI build the entire scraper.</div>
+                <textarea id="nl-prompt" placeholder="e.g., Extract all product titles and prices, then click the next page button."></textarea>
+                <button id="btn-generate-blueprint" class="btn btn-primary" style="background-color: #c026d3; border-color: #c026d3; margin-top: 8px;">Generate Blueprint</button>
+            </div>
+
             <div class="card" style="background: #eff6ff; border-color: #bfdbfe;">
                 <label style="color: var(--primary);">Saved Jobs Profile</label>
                 <div class="flex mt-2" style="align-items: center;">
@@ -117,7 +124,10 @@
                 <label style="color: var(--primary);">Pre-Extraction Actions (Optional)</label>
                 <div style="font-size: 11px; color: var(--text-muted); margin-bottom: 8px;">Run clicks or type text before scraping (e.g. close cookie banners).</div>
                 <div id="actions-container"></div>
-                <button id="add-action" class="btn btn-outline mt-2" style="font-size: 12px; padding: 6px;">+ Add Action</button>
+                <div style="display: flex; gap: 8px; margin-top: 8px;">
+                    <button id="add-action" class="btn btn-outline" style="font-size: 12px; padding: 6px; flex: 1;">+ Add Action</button>
+                    <button id="btn-record-macro" class="btn btn-outline" style="font-size: 12px; padding: 6px; flex: 1; border-color: #ef4444; color: #ef4444;">🔴 Record Actions</button>
+                </div>
             </div>
 
             <div class="card">

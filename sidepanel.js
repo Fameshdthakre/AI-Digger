@@ -252,7 +252,75 @@ function addActionRow(type = 'click', selector = '', text = '') {
 
 document.getElementById('add-action').addEventListener('click', () => addActionRow());
 
+// Visual Macro Recorder Logic
+let isRecordingMacro = false;
+document.getElementById('btn-record-macro').addEventListener('click', async () => {
+    const btn = document.getElementById('btn-record-macro');
+    isRecordingMacro = !isRecordingMacro;
+
+    if (isRecordingMacro) {
+        btn.innerText = '⏹ Stop Recording';
+        btn.style.backgroundColor = '#fee2e2'; // Light red
+    } else {
+        btn.innerText = '🔴 Record Actions';
+        btn.style.backgroundColor = 'transparent';
+    }
+
+    const [tab] = await chrome.tabs.query({active: true, currentWindow: true});
+    await chrome.scripting.executeScript({
+        target: { tabId: tab.id },
+        files: ['turndown.js', 'content.js']
+    }).catch(err => console.error(err));
+
+    chrome.tabs.sendMessage(tab.id, { action: 'TOGGLE_MACRO_RECORDING', isRecording: isRecordingMacro });
+});
+
+// Listener for Macro Actions
+chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+    if (message.action === 'MACRO_ACTION_RECORDED') {
+        addActionRow(message.data.type, message.data.selector, message.data.text || '');
+        sendResponse({ status: 'received' });
+    }
+    // Need to return true? Not strictly necessary if not async, but good practice
+    return true;
+});
+
+
 document.getElementById('add-field').addEventListener('click', () => addFieldRow());
+
+// Magic Build Logic
+document.getElementById('btn-generate-blueprint').addEventListener('click', async () => {
+    const btn = document.getElementById('btn-generate-blueprint');
+    const promptText = document.getElementById('nl-prompt').value;
+    if (!promptText) {
+        alert("Please enter a description of what you want to scrape.");
+        return;
+    }
+
+    btn.innerText = 'Generating...';
+    btn.disabled = true;
+
+    const [tab] = await chrome.tabs.query({active: true, currentWindow: true});
+    await chrome.scripting.executeScript({
+        target: { tabId: tab.id },
+        files: ['turndown.js', 'content.js']
+    }).catch(err => console.error(err));
+
+    chrome.tabs.sendMessage(tab.id, { action: 'GET_PAGE_TEXT' }, (response) => {
+        if (response && response.text) {
+            chrome.runtime.sendMessage({
+                action: 'MAGIC_BUILD_BLUEPRINT',
+                userPrompt: promptText,
+                pageText: response.text
+            });
+        } else {
+            btn.innerText = 'Generate Blueprint';
+            btn.disabled = false;
+            alert("Could not extract text from page to analyze.");
+        }
+    });
+});
+
 
 // Auto-Detect Logic
 document.getElementById('btn-auto-detect').addEventListener('click', async () => {
@@ -307,6 +375,51 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
                 const cb = newRow.querySelector('.f-multiple');
                 if (cb) cb.checked = f.multiple || false;
             });
+        }
+        sendResponse({ status: 'received' });
+    } else if (message.action === 'MAGIC_BUILD_RESULT') {
+        const btn = document.getElementById('btn-generate-blueprint');
+        btn.innerText = 'Generate Blueprint';
+        btn.disabled = false;
+
+        if (message.error) {
+            alert(`Magic Build failed: ${message.error}`);
+        } else if (message.blueprint) {
+            const bp = message.blueprint;
+
+            if (bp.jobName) document.getElementById('job-name').value = bp.jobName;
+
+            if (bp.scrapingType) {
+                document.getElementById('scrape-mode').value = bp.scrapingType;
+                document.getElementById('scrape-mode').dispatchEvent(new Event('change'));
+            }
+
+            if (bp.singlePageOptions) {
+                if (bp.singlePageOptions.nextButtonSelector) {
+                    document.getElementById('next-button-selector').value = bp.singlePageOptions.nextButtonSelector;
+                }
+                if (bp.singlePageOptions.maxPages) {
+                    document.getElementById('max-pages').value = bp.singlePageOptions.maxPages;
+                }
+                if (bp.singlePageOptions.infiniteScroll !== undefined) {
+                    document.getElementById('enable-infinite-scroll').checked = bp.singlePageOptions.infiniteScroll;
+                    document.getElementById('enable-infinite-scroll').dispatchEvent(new Event('change'));
+                }
+                if (bp.singlePageOptions.maxScrolls) {
+                    document.getElementById('max-scrolls').value = bp.singlePageOptions.maxScrolls;
+                }
+            }
+
+            if (bp.fields && bp.fields.length > 0) {
+                fieldsContainer.innerHTML = '';
+                fieldCount = 0;
+                bp.fields.forEach(f => {
+                    addFieldRow(f.name, f.selector, f.type || 'css', f.extractType || 'text', f.attributeName || '', f.format || 'raw');
+                    const newRow = fieldsContainer.lastElementChild;
+                    const cb = newRow.querySelector('.f-multiple');
+                    if (cb) cb.checked = f.multiple || false;
+                });
+            }
         }
         sendResponse({ status: 'received' });
     }
