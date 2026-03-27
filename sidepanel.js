@@ -26,6 +26,28 @@ enableScrolls.addEventListener('change', (e) => {
     scrollsContainer.style.display = e.target.checked ? 'block' : 'none';
 });
 
+// Scheduling toggle
+const enableSchedule = document.getElementById('enable-schedule');
+const scheduleIntervalGroup = document.getElementById('schedule-interval-group');
+const scheduleTargetGroup = document.getElementById('schedule-target-group');
+enableSchedule.addEventListener('change', (e) => {
+    scheduleIntervalGroup.style.display = e.target.checked ? 'block' : 'none';
+    scheduleTargetGroup.style.display = e.target.checked ? 'block' : 'none';
+});
+
+const scheduleTargetMode = document.getElementById('schedule-target-mode');
+const scheduleStartUrlGroup = document.getElementById('schedule-start-url-group');
+const scheduleMultipleUrlsGroup = document.getElementById('schedule-multiple-urls-group');
+
+scheduleTargetMode.addEventListener('change', (e) => {
+    scheduleStartUrlGroup.style.display = e.target.value === 'start-url' ? 'block' : 'none';
+    scheduleMultipleUrlsGroup.style.display = e.target.value === 'multiple-urls' ? 'block' : 'none';
+});
+const scrollsContainer = document.getElementById('scrolls-container');
+enableScrolls.addEventListener('change', (e) => {
+    scrollsContainer.style.display = e.target.checked ? 'block' : 'none';
+});
+
 // Test Container Button
 document.getElementById('test-container-btn').addEventListener('click', async () => {
     const selectorInput = document.getElementById('item-container-selector');
@@ -148,6 +170,9 @@ function addFieldRow(name = '', selector = '', type = 'css', extractType = 'text
         <div class="field-row-top">
             <label class="checkbox-label" style="width: auto; margin-right: 4px;" title="Set as Primary Key">
                 <input type="radio" name="primary-key-radio" class="f-primary-key" ${fieldCount === 1 ? 'checked' : ''} /> PK
+            </label>
+            <label class="checkbox-label" style="width: auto; margin-right: 4px;" title="Set as Detail URL">
+                <input type="radio" name="detail-url-radio" class="f-detail-url" /> URL
             </label>
             <input type="text" placeholder="Field Name" class="f-name" value="${name}" style="flex: 1;" />
             <select class="f-type" style="width: 100px;">
@@ -593,23 +618,97 @@ loadDefaultFields();
 // === Saved Jobs Logic ===
 let savedJobs = {};
 
+const DEFAULT_RECIPES = {
+    "[Template] Amazon Product Search": {
+        jobName: "[Template] Amazon Product Search",
+        scrapingType: "single-page",
+        outputFormat: "flat",
+        primaryKeyField: "Product Title",
+        containerSelector: "div[data-component-type='s-search-result']",
+        singlePageOptions: {
+            nextButtonSelector: "a.s-pagination-next",
+            maxPages: 3,
+            infiniteScroll: false,
+            maxScrolls: 5
+        },
+        fields: [
+            { name: "Product Title", selector: "h2 a span", type: "css", extractType: "text", multiple: false, format: "raw" },
+            { name: "Price", selector: ".a-price-whole", type: "css", extractType: "text", multiple: false, format: "raw" },
+            { name: "Product Link", selector: "h2 a", type: "css", extractType: "href", multiple: false, format: "raw" }
+        ],
+        actions: [],
+        antiBot: { stealthMode: true, minDelayMs: 3000, maxDelayMs: 6000, batchSize: 10, batchPauseMs: 10000 }
+    },
+    "[Template] LinkedIn Company Data": {
+        jobName: "[Template] LinkedIn Company Data",
+        scrapingType: "single-page",
+        outputFormat: "flat",
+        primaryKeyField: "Company Name",
+        containerSelector: ".org-top-card-summary-info-list",
+        singlePageOptions: { maxPages: 1, infiniteScroll: false },
+        fields: [
+            { name: "Company Name", selector: "h1", type: "css", extractType: "text", multiple: false, format: "raw" },
+            { name: "Website", selector: "a.link-without-visited-state", type: "css", extractType: "href", multiple: false, format: "raw" },
+            { name: "Industry", selector: ".org-top-card-summary-info-list__info-item", type: "css", extractType: "text", multiple: false, format: "raw" }
+        ],
+        actions: [],
+        antiBot: { stealthMode: true, minDelayMs: 2000, maxDelayMs: 5000, batchSize: 10, batchPauseMs: 10000 }
+    },
+    "[Template] Generic Blog Scraper": {
+        jobName: "[Template] Generic Blog Scraper",
+        scrapingType: "single-page",
+        outputFormat: "flat",
+        primaryKeyField: "Article Title",
+        containerSelector: "article",
+        singlePageOptions: {
+            nextButtonSelector: "a.next, .pagination-next",
+            maxPages: 5,
+            infiniteScroll: false
+        },
+        fields: [
+            { name: "Article Title", selector: "h2", type: "css", extractType: "text", multiple: false, format: "raw" },
+            { name: "Author", selector: ".author", type: "css", extractType: "text", multiple: false, format: "raw" },
+            { name: "Publish Date", selector: "time", type: "css", extractType: "text", multiple: false, format: "raw" },
+            { name: "Link", selector: "a", type: "css", extractType: "href", multiple: false, format: "raw" }
+        ],
+        actions: [],
+        antiBot: { stealthMode: false, minDelayMs: 1000, maxDelayMs: 3000, batchSize: 0, batchPauseMs: 10000 }
+    }
+};
+
 function updateSavedJobsDropdown(selectedJobName = null) {
     const select = document.getElementById('saved-jobs-select');
     select.innerHTML = '<option value="">-- Create a new job --</option>';
+    const detailSelect = document.getElementById('linked-detail-job');
+    const currentDetailJob = detailSelect.value;
+    detailSelect.innerHTML = '<option value="">-- None --</option>';
+
     for (const jobName in savedJobs) {
         const option = document.createElement('option');
         option.value = jobName;
         option.innerText = jobName;
         if (jobName === selectedJobName) option.selected = true;
         select.appendChild(option);
+
+        // Populate detail job dropdown
+        if (jobName !== document.getElementById('job-name').value) {
+            const detailOption = document.createElement('option');
+            detailOption.value = jobName;
+            detailOption.innerText = jobName;
+            if (jobName === currentDetailJob) detailOption.selected = true;
+            detailSelect.appendChild(detailOption);
+        }
     }
 }
 
+// Update detail jobs dropdown when job name changes to prevent self-linking
+document.getElementById('job-name').addEventListener('input', () => {
+    updateSavedJobsDropdown(document.getElementById('saved-jobs-select').value);
+});
+
 chrome.storage.local.get(['savedJobs'], (result) => {
-    if (result.savedJobs) {
-        savedJobs = result.savedJobs;
-        updateSavedJobsDropdown();
-    }
+    savedJobs = { ...DEFAULT_RECIPES, ...(result.savedJobs || {}) };
+    updateSavedJobsDropdown();
 });
 
 function getBlueprintFromUI() {
@@ -627,14 +726,33 @@ function getBlueprintFromUI() {
         primaryKeyField = pkRadios[0].closest('.field-row').querySelector('.f-name').value;
     }
 
+    let detailUrlField = null;
+    const urlRadios = document.querySelectorAll('.f-detail-url');
+    urlRadios.forEach((radio) => {
+        if (radio.checked) {
+            const row = radio.closest('.field-row');
+            detailUrlField = row.querySelector('.f-name').value;
+        }
+    });
+
     return {
         jobName: document.getElementById('job-name').value,
         scrapingType: document.getElementById('scrape-mode').value,
         outputFormat: document.getElementById('output-format').value,
         primaryKeyField: primaryKeyField,
+        detailUrlField: detailUrlField,
+        linkedDetailJob: document.getElementById('linked-detail-job').value,
+        maxDetailPages: parseInt(document.getElementById('max-detail-pages').value),
         urls: document.getElementById('url-list').value,
         webhookUrl: document.getElementById('webhook-url').value,
         containerSelector: document.getElementById('item-container-selector').value,
+        schedule: {
+            enabled: document.getElementById('enable-schedule').checked,
+            interval: parseInt(document.getElementById('schedule-interval').value) || 60,
+            targetMode: document.getElementById('schedule-target-mode').value,
+            startUrl: document.getElementById('schedule-start-url').value,
+            multipleUrls: document.getElementById('schedule-multiple-urls').value
+        },
         actions: Array.from(document.getElementById('actions-container').querySelectorAll('.field-row')).map(row => ({
             type: row.querySelector('.a-type').value,
             selector: row.querySelector('.a-selector').value,
@@ -671,9 +789,27 @@ document.getElementById('btn-save-job').addEventListener('click', () => {
         alert("Please enter a Job Name in the text box below to save it.");
         return;
     }
-    savedJobs[blueprint.jobName] = blueprint;
-    chrome.storage.local.set({ savedJobs: savedJobs }, () => {
+
+    if (blueprint.jobName.startsWith("[Template]")) {
+        alert("You cannot overwrite a Template. Please use the 'Clone' button or change the Job Name.");
+        return;
+    }
+
+    // Don't save default recipes to local storage to save space, only custom ones
+    const jobsToSave = { ...savedJobs };
+    for (const key in DEFAULT_RECIPES) {
+        delete jobsToSave[key];
+    }
+
+    jobsToSave[blueprint.jobName] = blueprint;
+    savedJobs[blueprint.jobName] = blueprint; // update local memory too
+
+    chrome.storage.local.set({ savedJobs: jobsToSave }, () => {
         updateSavedJobsDropdown(blueprint.jobName);
+
+        // Notify background to update schedules
+        chrome.runtime.sendMessage({ action: 'UPDATE_SCHEDULES' });
+
         const btn = document.getElementById('btn-save-job');
         const origText = btn.innerText;
         btn.innerText = 'Saved!';
@@ -704,6 +840,9 @@ document.getElementById('saved-jobs-select').addEventListener('change', (e) => {
 
     // Set Basic Info
     document.getElementById('job-name').value = blueprint.jobName;
+    updateSavedJobsDropdown(jobName); // Ensure detail job dropdown excludes current job
+    document.getElementById('linked-detail-job').value = blueprint.linkedDetailJob || '';
+    document.getElementById('max-detail-pages').value = blueprint.maxDetailPages || 10;
     document.getElementById('scrape-mode').value = blueprint.scrapingType;
     document.getElementById('scrape-mode').dispatchEvent(new Event('change'));
     if (blueprint.outputFormat) {
@@ -722,6 +861,24 @@ document.getElementById('saved-jobs-select').addEventListener('change', (e) => {
         document.getElementById('batch-pause').value = blueprint.antiBot.batchPauseMs || 10000;
     } else {
         document.getElementById('enable-stealth-mode').checked = false;
+    }
+
+    // Set Schedule Options
+    if (blueprint.schedule) {
+        document.getElementById('enable-schedule').checked = blueprint.schedule.enabled || false;
+        document.getElementById('enable-schedule').dispatchEvent(new Event('change'));
+        if (blueprint.schedule.interval) {
+            document.getElementById('schedule-interval').value = blueprint.schedule.interval;
+        }
+        if (blueprint.schedule.targetMode) {
+            document.getElementById('schedule-target-mode').value = blueprint.schedule.targetMode;
+            document.getElementById('schedule-target-mode').dispatchEvent(new Event('change'));
+        }
+        document.getElementById('schedule-start-url').value = blueprint.schedule.startUrl || '';
+        document.getElementById('schedule-multiple-urls').value = blueprint.schedule.multipleUrls || '';
+    } else {
+        document.getElementById('enable-schedule').checked = false;
+        document.getElementById('enable-schedule').dispatchEvent(new Event('change'));
     }
 
     // Set Single Page Options
@@ -758,6 +915,12 @@ document.getElementById('saved-jobs-select').addEventListener('change', (e) => {
                 const pkRadio = newRow.querySelector('.f-primary-key');
                 if (pkRadio) pkRadio.checked = true;
             }
+
+            // Set detail URL
+            if (blueprint.detailUrlField === f.name) {
+                const urlRadio = newRow.querySelector('.f-detail-url');
+                if (urlRadio) urlRadio.checked = true;
+            }
         });
     } else {
         loadDefaultFields();
@@ -768,13 +931,49 @@ document.getElementById('btn-delete-job').addEventListener('click', () => {
     const jobName = document.getElementById('saved-jobs-select').value;
     if (!jobName || !savedJobs[jobName]) return;
 
+    if (jobName.startsWith("[Template]")) {
+        alert("Templates cannot be deleted.");
+        return;
+    }
+
     if (confirm(`Are you sure you want to delete the saved job "${jobName}"?`)) {
         delete savedJobs[jobName];
-        chrome.storage.local.set({ savedJobs: savedJobs }, () => {
+
+        const jobsToSave = { ...savedJobs };
+        for (const key in DEFAULT_RECIPES) {
+            delete jobsToSave[key];
+        }
+
+        chrome.storage.local.set({ savedJobs: jobsToSave }, () => {
             updateSavedJobsDropdown();
+            // Reset to default new state
+            document.getElementById('saved-jobs-select').value = "";
+            document.getElementById('saved-jobs-select').dispatchEvent(new Event('change'));
             alert("Job deleted.");
         });
     }
+});
+
+document.getElementById('btn-clone-job').addEventListener('click', () => {
+    const jobName = document.getElementById('saved-jobs-select').value;
+    if (!jobName || !savedJobs[jobName]) {
+        alert("Please select a job to clone.");
+        return;
+    }
+
+    let clonedName = jobName;
+    if (clonedName.startsWith("[Template] ")) {
+        clonedName = clonedName.replace("[Template] ", "Copy of ");
+    } else {
+        clonedName = `Copy of ${clonedName}`;
+    }
+
+    document.getElementById('job-name').value = clonedName;
+
+    // Switch dropdown to "Create a new job" so saving will create a new entry
+    document.getElementById('saved-jobs-select').value = "";
+
+    alert(`Job cloned as "${clonedName}". Please make your changes and click "Save Current".`);
 });
 
 // Import / Export Blueprint Logic

@@ -56,6 +56,9 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
             chrome.runtime.sendMessage({ action: 'AI_ANALYZE_RESULT', error: err.message });
         });
         sendResponse({ status: 'analyzing' });
+    } else if (message.action === 'UPDATE_SCHEDULES') {
+        updateSchedules();
+        sendResponse({ status: 'schedules_updated' });
     } else if (message.action === 'MAGIC_BUILD_BLUEPRINT') {
         generateBlueprintWithAI(message.userPrompt, message.pageText).then(blueprint => {
             chrome.runtime.sendMessage({ action: 'MAGIC_BUILD_RESULT', blueprint: blueprint });
@@ -80,13 +83,79 @@ function addLog(message) {
 }
 
 // Alarm listener to wake up background script and process next URL/Page
-chrome.alarms.onAlarm.addListener((alarm) => {
+chrome.alarms.onAlarm.addListener(async (alarm) => {
     if (alarm.name === "nextJobStep") {
         processNextStep();
+    } else if (alarm.name.startsWith("cron_")) {
+        const jobName = alarm.name.substring(5); // Remove 'cron_'
+        addLog(`Cron triggered for scheduled job: ${jobName}`);
+
+        // Don't start if already running
+        const res = await chrome.storage.local.get(['jobState', 'savedJobs']);
+        if (res.jobState && res.jobState.isRunning) {
+            addLog(`Skipping scheduled run for ${jobName} because another job is already active.`);
+            return;
+        }
+
+        const savedJobs = res.savedJobs || {};
+        const blueprint = savedJobs[jobName];
+
+        if (!blueprint) {
+            addLog(`Scheduled job ${jobName} not found in saved profiles. Clearing alarm.`);
+            chrome.alarms.clear(alarm.name);
+            return;
+        }
+
+        // Prepare blueprint for scheduled run based on target mode
+        const scheduledBlueprint = JSON.parse(JSON.stringify(blueprint)); // Deep copy
+
+        if (scheduledBlueprint.schedule) {
+            if (scheduledBlueprint.schedule.targetMode === 'start-url' && scheduledBlueprint.schedule.startUrl) {
+                // To force single page to open this URL, we can create a tab and assign it
+                addLog(`Opening Start URL for scheduled run: ${scheduledBlueprint.schedule.startUrl}`);
+                let tab = await createOrUpdateTab(scheduledBlueprint.schedule.startUrl);
+                await sleep(2000); // Give it time to load
+                startJob(scheduledBlueprint, tab.id);
+            } else if (scheduledBlueprint.schedule.targetMode === 'multiple-urls' && scheduledBlueprint.schedule.multipleUrls) {
+                // Temporarily override blueprint mode to multiple urls for this run
+                scheduledBlueprint.scrapingType = 'multi-url';
+                scheduledBlueprint.urls = scheduledBlueprint.schedule.multipleUrls;
+                startJob(scheduledBlueprint);
+            } else {
+                // active-tab mode
+                addLog(`Scheduled job set to active tab. Attempting to run on current tab.`);
+                startJob(scheduledBlueprint);
+            }
+        } else {
+            startJob(scheduledBlueprint);
+        }
     }
 });
 
-async function startJob(blueprint) {
+async function updateSchedules() {
+    const res = await chrome.storage.local.get(['savedJobs']);
+    const savedJobs = res.savedJobs || {};
+
+    // Clear all existing cron alarms
+    const alarms = await chrome.alarms.getAll();
+    for (let alarm of alarms) {
+        if (alarm.name.startsWith("cron_")) {
+            await chrome.alarms.clear(alarm.name);
+        }
+    }
+
+    // Register active schedules
+    for (const jobName in savedJobs) {
+        const job = savedJobs[jobName];
+        if (job.schedule && job.schedule.enabled && job.schedule.interval > 0) {
+            const alarmName = `cron_${jobName}`;
+            chrome.alarms.create(alarmName, { periodInMinutes: job.schedule.interval });
+            addLog(`Registered cron schedule: ${alarmName} every ${job.schedule.interval} minutes.`);
+        }
+    }
+}
+
+async function startJob(blueprint, explicitTabId = null) {
     currentJob = blueprint;
     isRunning = true;
     jobLogs = [];
@@ -107,9 +176,30 @@ async function startJob(blueprint) {
         state.currentPage = 1;
         jobProgress.total = state.maxPages;
 
-        // Ensure active tab logic
-        let [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
-        state.tabId = tab.id;
+        // Ensure active tab logic if not running from schedule with startUrl
+        if (explicitTabId) {
+            state.tabId = explicitTabId;
+        } else if (!state.tabId) {
+            let [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+            state.tabId = tab.id;
+        }
+    }
+
+    // Initialize deep crawl state
+    state.deepCrawlQueue = [];
+    state.isDeepCrawling = false;
+    state.deepCrawlIndex = 0;
+
+    // Attempt to preload detail blueprint if linked
+    if (blueprint.linkedDetailJob) {
+        const savedJobsObj = await chrome.storage.local.get(['savedJobs']);
+        const savedJobs = savedJobsObj.savedJobs || {};
+        if (savedJobs[blueprint.linkedDetailJob]) {
+            state.detailBlueprint = savedJobs[blueprint.linkedDetailJob];
+            addLog(`Loaded linked detail job: ${blueprint.linkedDetailJob}`);
+        } else {
+            addLog(`WARNING: Linked detail job '${blueprint.linkedDetailJob}' not found.`);
+        }
     }
 
     await chrome.storage.local.set({ jobState: state });
@@ -136,10 +226,122 @@ async function processNextStep() {
     let state = res.jobState;
     const blueprint = state.blueprint;
 
+    // Handle Deep Crawling Phase
+    if (state.isDeepCrawling && state.detailBlueprint) {
+        if (state.deepCrawlIndex >= state.deepCrawlQueue.length) {
+            addLog("Finished processing deep crawl queue for this batch.");
+            state.isDeepCrawling = false;
+            state.deepCrawlQueue = [];
+            state.deepCrawlIndex = 0;
+            await chrome.storage.local.set({ jobState: state });
+
+            // Resume master job or complete
+            if (blueprint.scrapingType === 'multi-url' && state.currentIndex >= state.urlsToScrape.length) {
+                completeJob();
+            } else if (blueprint.scrapingType === 'single-page' && state.currentPage > state.maxPages) {
+                completeJob();
+            } else {
+                chrome.alarms.create("nextJobStep", { when: Date.now() + 60000 });
+                setTimeout(processNextStep, 1000);
+            }
+            return;
+        }
+
+        const queueItem = state.deepCrawlQueue[state.deepCrawlIndex];
+        const detailUrl = queueItem.detailUrl;
+        jobProgress.current = state.deepCrawlIndex + 1;
+        jobProgress.total = state.deepCrawlQueue.length;
+        addLog(`Deep Crawling ${jobProgress.current}/${jobProgress.total}: ${detailUrl}`);
+
+        try {
+            let tab = await createOrUpdateTab(detailUrl);
+            await sleep(2000);
+
+            await ensureScriptInjected(tab.id);
+            await executeActions(tab.id, state.detailBlueprint.actions);
+
+            if (state.detailBlueprint.antiBot?.stealthMode) {
+                await chrome.tabs.sendMessage(tab.id, { action: 'SIMULATE_STEALTH' }).catch(() => null);
+            }
+
+            let detailData = await scrapeTab(tab.id, state.detailBlueprint, detailUrl);
+
+            // Merge Data
+            if (detailData) {
+                // If detail returns multiple items (e.g., list of reviews), we create a row for each
+                // If it's just a single flat object, we merge it once
+                let mergedRows = [];
+
+                if (detailData.items && Array.isArray(detailData.items)) {
+                    detailData.items.forEach(item => {
+                        mergedRows.push({ ...queueItem.parentRow, ...item });
+                    });
+                } else if (state.detailBlueprint.outputFormat === 'grouped') {
+                     // Legacy flat output arrays handling is omitted for simplicity in detail pages.
+                     // We assume detail jobs are generally extracting a single record or using AI/Container.
+                     mergedRows.push({ ...queueItem.parentRow, ...detailData });
+                } else {
+                    // Extract first values from parallel arrays if legacy flat mode used in detail
+                    const flatDetail = {};
+                    for (const [key, val] of Object.entries(detailData)) {
+                        if (Array.isArray(val)) {
+                            flatDetail[key] = val[0] !== undefined ? val[0] : "";
+                        } else {
+                            flatDetail[key] = val;
+                        }
+                    }
+                    mergedRows.push({ ...queueItem.parentRow, ...flatDetail });
+                }
+
+                // Final Save
+                mergedRows.forEach(row => {
+                    // Ensure fixed columns are maintained
+                    const finalRow = { Timestamp: queueItem.parentRow.Timestamp, URL: detailUrl, PageIndex: queueItem.parentRow.PageIndex, ...row };
+                    scrapedData.push(finalRow);
+                    triggerWebhook(blueprint.webhookUrl, finalRow);
+                });
+                chrome.storage.local.set({ scrapedData: scrapedData });
+            } else {
+                 addLog(`WARNING: No data extracted from detail page: ${detailUrl}`);
+                 // Save parent row anyway if detail fails
+                 scrapedData.push(queueItem.parentRow);
+                 triggerWebhook(blueprint.webhookUrl, queueItem.parentRow);
+                 chrome.storage.local.set({ scrapedData: scrapedData });
+            }
+
+            let delayMs = getRandomDelay(state.detailBlueprint.antiBot.minDelayMs, state.detailBlueprint.antiBot.maxDelayMs);
+            state.deepCrawlIndex++;
+            await chrome.storage.local.set({ jobState: state });
+
+            chrome.alarms.create("nextJobStep", { when: Date.now() + 60000 });
+            setTimeout(processNextStep, delayMs);
+
+        } catch (error) {
+            addLog(`ERROR: Detail scrape failed ${detailUrl}: ${error.message}`);
+            // Save parent row anyway if detail fails
+            scrapedData.push(queueItem.parentRow);
+            triggerWebhook(blueprint.webhookUrl, queueItem.parentRow);
+            chrome.storage.local.set({ scrapedData: scrapedData });
+
+            state.deepCrawlIndex++;
+            await chrome.storage.local.set({ jobState: state });
+            chrome.alarms.create("nextJobStep", { when: Date.now() + 60000 });
+            setTimeout(processNextStep, 1000);
+        }
+        return;
+    }
+
     if (blueprint.scrapingType === 'multi-url') {
         if (state.currentIndex >= state.urlsToScrape.length) {
-            completeJob();
-            return;
+            if (state.deepCrawlQueue.length > 0) {
+                state.isDeepCrawling = true;
+                await chrome.storage.local.set({ jobState: state });
+                processNextStep();
+                return;
+            } else {
+                completeJob();
+                return;
+            }
         }
 
         const url = state.urlsToScrape[state.currentIndex];
@@ -159,7 +361,14 @@ async function processNextStep() {
             }
 
             let extractedData = await scrapeTab(tab.id, blueprint, url);
-            if (extractedData) saveExtractedData(extractedData);
+            if (extractedData) {
+                // If Deep Crawl is enabled, route data to queue instead of saving
+                if (blueprint.linkedDetailJob && state.detailBlueprint) {
+                    enqueueForDeepCrawl(extractedData, state, url, `URL-${state.currentIndex + 1}`);
+                } else {
+                    saveExtractedData(extractedData, url, `URL-${state.currentIndex + 1}`);
+                }
+            }
 
             state.batchCounter++;
             let delayMs = getRandomDelay(blueprint.antiBot.minDelayMs, blueprint.antiBot.maxDelayMs);
@@ -173,10 +382,16 @@ async function processNextStep() {
             state.currentIndex++;
             await chrome.storage.local.set({ jobState: state });
 
-            if (state.currentIndex < state.urlsToScrape.length) {
+            // Check if we need to switch to deep crawling phase
+            if (state.currentIndex >= state.urlsToScrape.length && state.deepCrawlQueue.length > 0) {
+                 addLog(`Master job batch done. Switching to Deep Crawl for ${state.deepCrawlQueue.length} items...`);
+                 state.isDeepCrawling = true;
+                 await chrome.storage.local.set({ jobState: state });
+                 chrome.alarms.create("nextJobStep", { when: Date.now() + 60000 });
+                 setTimeout(processNextStep, delayMs);
+            } else if (state.currentIndex < state.urlsToScrape.length) {
                 addLog(`Waiting ${delayMs}ms before next URL...`);
-                // Use setTimeout for actual short delay, alarms as fallback
-                chrome.alarms.create("nextJobStep", { when: Date.now() + 60000 }); // 1 min fallback wake up
+                chrome.alarms.create("nextJobStep", { when: Date.now() + 60000 });
                 setTimeout(processNextStep, delayMs);
             } else {
                 completeJob();
@@ -191,8 +406,15 @@ async function processNextStep() {
         }
     } else if (blueprint.scrapingType === 'single-page') {
         if (state.currentPage > state.maxPages) {
-            completeJob();
-            return;
+            if (state.deepCrawlQueue.length > 0) {
+                state.isDeepCrawling = true;
+                await chrome.storage.local.set({ jobState: state });
+                processNextStep();
+                return;
+            } else {
+                completeJob();
+                return;
+            }
         }
 
         jobProgress.current = state.currentPage;
@@ -225,34 +447,60 @@ async function processNextStep() {
 
             let [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
             let extractedData = await scrapeTab(tabId, blueprint, tab.url);
-            if (extractedData) saveExtractedData(extractedData);
+            if (extractedData) {
+                if (blueprint.linkedDetailJob && state.detailBlueprint) {
+                    enqueueForDeepCrawl(extractedData, state, tab.url, `Single_Page-${state.currentPage}`);
+                } else {
+                    saveExtractedData(extractedData, tab.url, `Single_Page-${state.currentPage}`);
+                }
+            }
+
+            let hasNextPage = false;
+            let delayMs = 0;
 
             if (state.currentPage < state.maxPages) {
                 let nextSelector = blueprint.singlePageOptions?.nextButtonSelector;
                 if (!nextSelector) {
                     addLog("No 'Next Button' selector provided. Stopping pagination.");
-                    completeJob();
-                    return;
+                } else {
+                    if (blueprint.antiBot?.stealthMode) {
+                        addLog("Executing stealth human emulation before navigating...");
+                        await chrome.tabs.sendMessage(tabId, { action: 'SIMULATE_STEALTH' }).catch(() => null);
+                    }
+
+                    addLog(`Clicking next page...`);
+                    let clickRes = await chrome.tabs.sendMessage(tabId, { action: 'CLICK_NEXT', selector: nextSelector }).catch(()=>null);
+
+                    if (!clickRes || clickRes.status === 'not_found') {
+                        addLog("Next button not found. Reached end of pagination.");
+                    } else {
+                        hasNextPage = true;
+                        delayMs = getRandomDelay(blueprint.antiBot.minDelayMs, blueprint.antiBot.maxDelayMs);
+                    }
                 }
+            }
 
-                if (blueprint.antiBot?.stealthMode) {
-                    addLog("Executing stealth human emulation before navigating...");
-                    await chrome.tabs.sendMessage(tabId, { action: 'SIMULATE_STEALTH' }).catch(() => null);
-                }
-
-                addLog(`Clicking next page...`);
-                let clickRes = await chrome.tabs.sendMessage(tabId, { action: 'CLICK_NEXT', selector: nextSelector }).catch(()=>null);
-
-                if (!clickRes || clickRes.status === 'not_found') {
-                    addLog("Next button not found. Reached end of pagination.");
-                    completeJob();
-                    return;
-                }
-
-                let delayMs = getRandomDelay(blueprint.antiBot.minDelayMs, blueprint.antiBot.maxDelayMs);
+            // Advance state so when we resume we process the *next* page
+            if (hasNextPage) {
                 state.currentPage++;
-                await chrome.storage.local.set({ jobState: state });
+            } else {
+                // Force maxPages to trigger completion on next loop if we ran out of next buttons
+                state.currentPage = state.maxPages + 1;
+            }
 
+            await chrome.storage.local.set({ jobState: state });
+
+            // Immediately process queue after each page if it exists and we haven't hit limit
+            if (state.deepCrawlQueue.length > 0) {
+                 addLog(`Master page scraped. Switching to Deep Crawl for ${state.deepCrawlQueue.length} items before continuing...`);
+                 state.isDeepCrawling = true;
+                 await chrome.storage.local.set({ jobState: state });
+                 chrome.alarms.create("nextJobStep", { when: Date.now() + 60000 });
+                 setTimeout(processNextStep, 1000);
+                 return; // Exit here, processNextStep will handle resuming master later
+            }
+
+            if (hasNextPage) {
                 addLog(`Waiting ${delayMs}ms before next page...`);
                 chrome.alarms.create("nextJobStep", { when: Date.now() + 60000 }); // 1 min fallback wake up
                 setTimeout(processNextStep, delayMs + 2000);
@@ -392,27 +640,65 @@ async function scrapeTab(tabId, job, url) {
     return extractedData;
 }
 
-function saveExtractedData(data) {
+function enqueueForDeepCrawl(data, state, url, pageIndex) {
     if (!data) return;
+    const blueprint = state.blueprint;
 
-    let rowsToSave = [];
+    // Determine the field name to extract URL from
+    // Fallback to finding the first 'href' extractType field if user didn't explicitly select one
+    let urlFieldName = blueprint.detailUrlField;
+    if (!urlFieldName) {
+        const urlField = blueprint.fields.find(f => f.extractType === 'href');
+        if (urlField) urlFieldName = urlField.name;
+    }
+
+    if (!urlFieldName) {
+        addLog("WARNING: No Detail URL Field identified. Saving parent rows directly.");
+        saveExtractedData(data, url, pageIndex);
+        return;
+    }
+
+    let rowsGenerated = generateFlatRows(data, blueprint, url, pageIndex);
+
+    rowsGenerated.forEach(row => {
+        let detailUrl = row[urlFieldName];
+        if (detailUrl && typeof detailUrl === 'string' && detailUrl.startsWith('http')) {
+            // Check max detail pages limit
+            if (state.deepCrawlQueue.length < blueprint.maxDetailPages) {
+                state.deepCrawlQueue.push({ detailUrl: detailUrl, parentRow: row });
+            } else {
+                // If limit reached, just save the row
+                saveExtractedData(row, url, pageIndex);
+            }
+        } else {
+            // If row has no valid URL, just save it
+            saveExtractedData(row, url, pageIndex);
+        }
+    });
+}
+
+function generateFlatRows(data, blueprint, url, pageIndex) {
+    let rowsGenerated = [];
 
     // CASE 1: Container Model or AI Model (returns structured 'items' array)
     if (data.items && Array.isArray(data.items)) {
         data.items.forEach(itemRow => {
             const finalRow = { ...itemRow };
-            if (data.URL) finalRow['URL'] = data.URL;
-            if (data.Timestamp) finalRow['Timestamp'] = data.Timestamp;
-            rowsToSave.push(finalRow);
+            finalRow['URL'] = url || data.URL;
+            finalRow['Timestamp'] = data.Timestamp || new Date().toISOString();
+            finalRow['PageIndex'] = pageIndex || "1";
+            rowsGenerated.push(finalRow);
         });
     }
     // CASE 2: Flat Model / Legacy (Returns an object with parallel arrays)
     else {
         // Output Format Grouped
-        if (currentJob?.outputFormat === 'grouped') {
-            if (data.URL) data['URL'] = data.URL;
-            if (data.Timestamp) data['Timestamp'] = data.Timestamp;
-            rowsToSave.push(data);
+        if (blueprint?.outputFormat === 'grouped') {
+            const finalRow = { ...data };
+            finalRow['URL'] = url || data.URL;
+            finalRow['Timestamp'] = data.Timestamp || new Date().toISOString();
+            finalRow['PageIndex'] = pageIndex || "1";
+            rowsGenerated.push(finalRow);
         }
         // Output Format Flat (Default/Strict Row Column)
         else {
@@ -431,8 +717,8 @@ function saveExtractedData(data) {
 
             // Determine Primary Key length constraint
             let rowCount = maxArrayLength;
-            if (currentJob?.primaryKeyField && Array.isArray(data[currentJob.primaryKeyField])) {
-                rowCount = data[currentJob.primaryKeyField].length;
+            if (blueprint?.primaryKeyField && Array.isArray(data[blueprint.primaryKeyField])) {
+                rowCount = data[blueprint.primaryKeyField].length;
             }
 
             if (rowCount > 0) {
@@ -444,15 +730,35 @@ function saveExtractedData(data) {
                         // Prevent "undefined" text strings
                         row[key] = data[key][i] !== undefined ? data[key][i] : "";
                     });
-                    rowsToSave.push(row);
+                    row['URL'] = url || data.URL;
+                    row['Timestamp'] = data.Timestamp || new Date().toISOString();
+                    row['PageIndex'] = pageIndex || "1";
+                    rowsGenerated.push(row);
                 }
             } else {
                 // No arrays found, it's just a single flat object
-                rowsToSave.push(data);
+                const finalRow = { ...data };
+                finalRow['URL'] = url || data.URL;
+                finalRow['Timestamp'] = data.Timestamp || new Date().toISOString();
+                finalRow['PageIndex'] = pageIndex || "1";
+                rowsGenerated.push(finalRow);
             }
         }
     }
+    return rowsGenerated;
+}
 
+function saveExtractedData(data, url, pageIndex) {
+    if (!data) return;
+
+    let rowsToSave = [];
+
+    // Check if `data` is already a flat row array (e.g. from enqueue fallback or deep crawl completion)
+    if (data.Timestamp && (data.URL || url)) {
+         rowsToSave = [data]; // Single pre-flattened row
+    } else {
+         rowsToSave = generateFlatRows(data, currentJob, url, pageIndex);
+    }
     // Push clean rows to global storage and trigger webhooks
     rowsToSave.forEach(row => {
         // Clean up internal keys just in case
