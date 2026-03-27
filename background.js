@@ -788,8 +788,6 @@ async function processSelfHealing(tabId, job, failedFields, markdown) {
     }
 }
 
-}
-
 // Helper: AI Blueprint Analyzer Caller
 async function analyzePageWithAI(text) {
     const settingsObj = await chrome.storage.sync.get(['aiSettings']);
