@@ -830,23 +830,26 @@ document.getElementById('btn-export-csv').addEventListener('click', () => {
             return;
         }
 
-        // Generate CSV string
-        // 1. Collect ALL unique headers across all rows
+        // Gather ALL unique headers across all rows in case some rows have missing keys
         const headerSet = new Set();
-        data.forEach(row => {
-            Object.keys(row).forEach(key => headerSet.add(key));
-        });
+        data.forEach(row => Object.keys(row).forEach(k => headerSet.add(k)));
         const headers = Array.from(headerSet);
 
         const csvRows = [];
         // Header row
-        csvRows.push(headers.map(h => `"${h.replace(/"/g, '""')}"`).join(','));
+        csvRows.push(headers.map(h => `"${String(h).replace(/"/g, '""')}"`).join(','));
 
-        // 2. Map data for each row against the unified headers
         for (const row of data) {
             const values = headers.map(header => {
-                // Handle undefined, null, or empty gracefully
-                let val = (row[header] === undefined || row[header] === null) ? "" : String(row[header]);
+                let rawVal = row[header];
+
+                // Prevent literal "undefined" or "null" text
+                if (rawVal === null || rawVal === undefined) rawVal = "";
+
+                // If an array somehow survived (e.g., user scraped nested tags), format it safely
+                if (typeof rawVal === 'object') rawVal = JSON.stringify(rawVal);
+
+                let val = String(rawVal);
                 // Escape quotes and wrap in quotes for CSV safety
                 val = val.replace(/"/g, '""');
                 return `"${val}"`;
@@ -856,8 +859,8 @@ document.getElementById('btn-export-csv').addEventListener('click', () => {
 
         const csvString = csvRows.join('\n');
         
-        // Create download blob
-        const blob = new Blob([csvString], { type: 'text/csv' });
+        // Create download blob with UTF-8 BOM so Excel parses special characters correctly
+        const blob = new Blob([new Uint8Array([0xEF, 0xBB, 0xBF]), csvString], { type: 'text/csv;charset=utf-8;' });
         const url = URL.createObjectURL(blob);
         
         chrome.downloads.download({
