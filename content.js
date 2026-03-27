@@ -90,8 +90,54 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         });
         return true;
     }
+    else if (message.action === 'SIMULATE_STEALTH') {
+        simulateHumanStealth().then(() => {
+            sendResponse({ status: 'stealth_complete' });
+        });
+        return true;
+    }
     return true;
 });
+
+// ==========================================
+// PHASE 1.8: ADVANCED HUMAN STEALTH EMULATION
+// ==========================================
+
+async function simulateHumanStealth() {
+    return new Promise((resolve) => {
+        const duration = Math.floor(Math.random() * 1500) + 1000; // 1000ms to 2500ms
+        const intervalTime = 100;
+        let elapsed = 0;
+
+        const interval = setInterval(() => {
+            // Simulate random mouse movements
+            const x = Math.floor(Math.random() * window.innerWidth);
+            const y = Math.floor(Math.random() * window.innerHeight);
+            const mouseEvent = new MouseEvent('mousemove', {
+                view: window,
+                bubbles: true,
+                cancelable: true,
+                clientX: x,
+                clientY: y
+            });
+            document.body.dispatchEvent(mouseEvent);
+
+            // Occasional micro-scrolls
+            if (Math.random() > 0.7) {
+                window.scrollBy({
+                    top: Math.random() * 100 - 50,
+                    behavior: 'smooth'
+                });
+            }
+
+            elapsed += intervalTime;
+            if (elapsed >= duration) {
+                clearInterval(interval);
+                resolve();
+            }
+        }, intervalTime);
+    });
+}
 
 async function executeAction(actionData) {
     const { type, selector, text } = actionData;
