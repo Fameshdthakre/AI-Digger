@@ -12,7 +12,10 @@
     "sidePanel"
   ],
   "host_permissions": [
-    "<all_urls>"
+    "<all_urls>",
+    "https://api.openai.com/*",
+    "https://generativelanguage.googleapis.com/*",
+    "https://api.anthropic.com/*"
   ],
   "background": {
     "service_worker": "background.js"
@@ -22,12 +25,5 @@
   },
   "action": {
     "default_title": "Open Scraper"
-  },
-  "content_scripts": [
-    {
-      "matches": ["<all_urls>"],
-      "js": ["content.js"],
-      "css": []
-    }
-  ]
+  }
 }

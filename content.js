@@ -4,31 +4,120 @@
  * and the actual DOM extraction logic when a job is running.
  */
 
+if (window.hasRun) {
+    // Prevent multiple injections
+} else {
+window.hasRun = true;
+
 let inspectorActive = false;
 let hoveredElement = null;
 let overlayBox = null;
-let uiPanel = null;
+let currentInspectFieldId = null;
+let currentInspectMode = 'css';
 
 // Listen for messages from popup or background
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
-    if (message.action === 'TOGGLE_INSPECTOR') {
-        if (inspectorActive) stopInspector();
-        else startInspector();
-        sendResponse({ status: 'inspector_toggled' });
+    if (message.action === 'START_INSPECTOR_FOR_FIELD') {
+        currentInspectFieldId = message.fieldId;
+        currentInspectMode = message.mode || 'css';
+        startInspector();
+        sendResponse({ status: 'inspector_started' });
     } 
     else if (message.action === 'EXTRACT_DATA') {
         const data = executeExtraction(message.blueprint);
         chrome.runtime.sendMessage({ action: 'SAVE_PAGE_DATA', data: [data] });
         sendResponse(data);
     }
+    else if (message.action === 'SCROLL_BOTTOM') {
+        window.scrollBy(0, window.innerHeight);
+        sendResponse({ status: 'scrolled' });
+    }
+    else if (message.action === 'START_AUTO_DETECT') {
+        startAutoDetect();
+        sendResponse({ status: 'started' });
+    }
+    else if (message.action === 'WAIT_FOR_ELEMENT') {
+        waitForElement(message.selector, 15000).then(found => {
+            sendResponse({ status: found ? 'found' : 'timeout' });
+        });
+        return true; // async
+    }
+    else if (message.action === 'CLICK_NEXT') {
+        const selector = message.selector;
+        let el = null;
+        try {
+            if (selector.startsWith('//') || selector.startsWith('(')) { // crude xpath detection
+                const xpathResult = document.evaluate(selector, document, null, XPathResult.FIRST_ORDERED_NODE_TYPE, null);
+                el = xpathResult.singleNodeValue;
+            } else {
+                el = document.querySelector(selector);
+            }
+        } catch(e) {}
+
+        if (el) {
+            el.click();
+            sendResponse({ status: 'clicked' });
+        } else {
+            sendResponse({ status: 'not_found' });
+        }
+    }
+    else if (message.action === 'TEST_SELECTOR') {
+        const result = extractFieldData(message.field);
+        sendResponse({ result: result });
+    }
+    else if (message.action === 'GET_PAGE_TEXT') {
+        sendResponse({ text: document.body.innerText.trim() });
+    }
+    else if (message.action === 'EXECUTE_ACTION') {
+        executeAction(message.actionData).then(result => {
+            sendResponse({ status: result ? 'success' : 'failed' });
+        });
+        return true;
+    }
     return true;
 });
+
+async function executeAction(actionData) {
+    const { type, selector, text } = actionData;
+
+    if (type === 'wait') {
+        return await waitForElement(selector, 15000);
+    }
+
+    // For click and type, find element
+    let el = null;
+    try {
+        if (selector.startsWith('//') || selector.startsWith('(')) {
+            el = document.evaluate(selector, document, null, XPathResult.FIRST_ORDERED_NODE_TYPE, null).singleNodeValue;
+        } else {
+            el = document.querySelector(selector);
+        }
+    } catch(e) {}
+
+    if (!el) return false;
+
+    if (type === 'click') {
+        el.click();
+        return true;
+    } else if (type === 'type') {
+        el.value = text;
+        // Dispatch events to trigger framework updates (React/Vue/Angular)
+        el.dispatchEvent(new Event('input', { bubbles: true }));
+        el.dispatchEvent(new Event('change', { bubbles: true }));
+        return true;
+    }
+
+    return false;
+}
 
 // ==========================================
 // PHASE 1: VISUAL INSPECTOR LOGIC
 // ==========================================
 
 function startInspector() {
+    // If already active, just clean up old overlay
+    if (overlayBox) overlayBox.remove();
+
     inspectorActive = true;
     document.body.style.cursor = 'crosshair';
     
@@ -44,21 +133,19 @@ function startInspector() {
 
     document.addEventListener('mouseover', handleMouseOver, true);
     document.addEventListener('click', handleClick, true);
-    
-    createUIPanel();
 }
 
 function stopInspector() {
     inspectorActive = false;
     document.body.style.cursor = 'default';
     if (overlayBox) overlayBox.remove();
-    if (uiPanel) uiPanel.remove();
     document.removeEventListener('mouseover', handleMouseOver, true);
     document.removeEventListener('click', handleClick, true);
+    currentInspectFieldId = null;
 }
 
 function handleMouseOver(e) {
-    if (!inspectorActive || uiPanel.contains(e.target)) return;
+    if (!inspectorActive) return;
     hoveredElement = e.target;
     
     const rect = hoveredElement.getBoundingClientRect();
@@ -69,24 +156,30 @@ function handleMouseOver(e) {
 }
 
 function handleClick(e) {
-    if (!inspectorActive || uiPanel.contains(e.target)) return;
+    if (!inspectorActive) return;
     e.preventDefault();
     e.stopPropagation();
     
-    const selector = generateCssSelector(hoveredElement);
-    const previewText = hoveredElement.innerText.trim().substring(0, 50);
-    
-    // Update the floating UI panel
-    const shadowRoot = uiPanel.shadowRoot;
-    shadowRoot.getElementById('selector-input').value = selector;
-    shadowRoot.getElementById('preview-text').innerText = `Preview: ${previewText}...`;
+    let selector = "";
+    if (currentInspectMode === 'xpath') {
+        selector = generateXPath(hoveredElement);
+    } else {
+        selector = generateCssSelector(hoveredElement);
+    }
     
     // Flash green to indicate selection
     overlayBox.style.backgroundColor = 'rgba(34, 197, 94, 0.4)';
     overlayBox.style.border = '2px solid #22c55e';
+
+    // Send result back to sidepanel
+    chrome.runtime.sendMessage({
+        action: 'INSPECTOR_RESULT',
+        fieldId: currentInspectFieldId,
+        selector: selector
+    });
+
     setTimeout(() => {
-        overlayBox.style.backgroundColor = 'rgba(59, 130, 246, 0.2)';
-        overlayBox.style.border = '2px solid #3b82f6';
+        stopInspector();
     }, 300);
 }
 
@@ -115,52 +208,208 @@ function generateCssSelector(el) {
     return path.join(' > ');
 }
 
-// Creates an isolated floating UI using Shadow DOM to avoid site CSS conflicts
-function createUIPanel() {
-    uiPanel = document.createElement('div');
-    uiPanel.style.position = 'fixed';
-    uiPanel.style.bottom = '20px';
-    uiPanel.style.right = '20px';
-    uiPanel.style.zIndex = '1000000';
-    
-    const shadow = uiPanel.attachShadow({mode: 'open'});
-    shadow.innerHTML = `
-        <style>
-            .panel { font-family: system-ui, sans-serif; background: white; border-radius: 8px; box-shadow: 0 10px 25px rgba(0,0,0,0.2); padding: 16px; width: 320px; border: 1px solid #e5e7eb; }
-            h3 { margin: 0 0 12px 0; font-size: 16px; color: #111827; }
-            label { font-size: 12px; color: #4b5563; font-weight: 600; display: block; margin-bottom: 4px; }
-            input { width: 100%; box-sizing: border-box; padding: 8px; border: 1px solid #d1d5db; border-radius: 4px; margin-bottom: 12px; font-family: monospace; font-size: 12px; }
-            .preview { font-size: 12px; color: #6b7280; margin-bottom: 12px; font-style: italic; background: #f3f4f6; padding: 6px; border-radius: 4px;}
-            .btn-group { display: flex; gap: 8px; }
-            button { flex: 1; padding: 8px; border: none; border-radius: 4px; cursor: pointer; font-weight: 600; font-size: 13px; }
-            .btn-save { background: #3b82f6; color: white; }
-            .btn-cancel { background: #f3f4f6; color: #374151; }
-        </style>
-        <div class="panel">
-            <h3>🔍 Universal Inspector</h3>
-            <p style="font-size:12px; color:#6b7280; margin-top:-8px; margin-bottom:12px;">Click any element on the page to generate its selector.</p>
-            
-            <label>Generated CSS Selector</label>
-            <input type="text" id="selector-input" placeholder="e.g. h1.title" readonly />
-            
-            <div class="preview" id="preview-text">Preview: (Click an element)</div>
-            
-            <div class="btn-group">
-                <button class="btn-save" id="btn-copy">Copy to Clipboard</button>
-                <button class="btn-cancel" id="btn-close">Close</button>
-            </div>
-        </div>
-    `;
-    
-    shadow.getElementById('btn-close').addEventListener('click', stopInspector);
-    shadow.getElementById('btn-copy').addEventListener('click', () => {
-        const sel = shadow.getElementById('selector-input').value;
-        navigator.clipboard.writeText(sel);
-        shadow.getElementById('btn-copy').innerText = "Copied!";
-        setTimeout(() => shadow.getElementById('btn-copy').innerText = "Copy to Clipboard", 2000);
+// Generates a robust XPath
+let autoDetectActive = false;
+
+function startAutoDetect() {
+    if (overlayBox) overlayBox.remove();
+
+    autoDetectActive = true;
+    document.body.style.cursor = 'crosshair';
+
+    overlayBox = document.createElement('div');
+    overlayBox.style.position = 'fixed';
+    overlayBox.style.pointerEvents = 'none';
+    overlayBox.style.zIndex = '999999';
+    overlayBox.style.border = '3px dashed #8b5cf6';
+    overlayBox.style.backgroundColor = 'rgba(139, 92, 246, 0.1)';
+    overlayBox.style.transition = 'all 0.1s ease';
+    document.body.appendChild(overlayBox);
+
+    document.addEventListener('mouseover', handleAutoDetectMouseOver, true);
+    document.addEventListener('click', handleAutoDetectClick, true);
+
+    // Create UI helper prompt
+    createAutoDetectUIPanel();
+}
+
+function stopAutoDetect() {
+    autoDetectActive = false;
+    document.body.style.cursor = 'default';
+    if (overlayBox) overlayBox.remove();
+    const ui = document.getElementById('ai-digger-auto-ui');
+    if (ui) ui.remove();
+    document.removeEventListener('mouseover', handleAutoDetectMouseOver, true);
+    document.removeEventListener('click', handleAutoDetectClick, true);
+}
+
+function handleAutoDetectMouseOver(e) {
+    if (!autoDetectActive) return;
+    const ui = document.getElementById('ai-digger-auto-ui');
+    if (ui && ui.contains(e.target)) return;
+
+    hoveredElement = e.target;
+
+    // Find closest container that has repeating children (like ul, grid, table, etc)
+    const rect = hoveredElement.getBoundingClientRect();
+    overlayBox.style.top = rect.top + 'px';
+    overlayBox.style.left = rect.left + 'px';
+    overlayBox.style.width = rect.width + 'px';
+    overlayBox.style.height = rect.height + 'px';
+}
+
+function handleAutoDetectClick(e) {
+    if (!autoDetectActive) return;
+    const ui = document.getElementById('ai-digger-auto-ui');
+    if (ui && ui.contains(e.target)) return;
+
+    e.preventDefault();
+    e.stopPropagation();
+
+    // Highlight
+    overlayBox.style.backgroundColor = 'rgba(34, 197, 94, 0.4)';
+    overlayBox.style.border = '3px solid #22c55e';
+
+    // Simple heuristic: walk up the DOM to find a repeating container
+    let itemContainer = hoveredElement;
+    let parent = itemContainer.parentNode;
+    while (parent && parent !== document.body) {
+        if (parent.children.length > 2 && parent.children[0].tagName === parent.children[1].tagName) {
+            itemContainer = parent.children[0]; // Take the first child as the template
+            break;
+        }
+        parent = parent.parentNode;
+    }
+
+    const fields = analyzeContainerForFields(itemContainer);
+
+    chrome.runtime.sendMessage({ action: 'AUTO_DETECT_RESULT', fields: fields });
+
+    setTimeout(() => {
+        stopAutoDetect();
+    }, 300);
+}
+
+function analyzeContainerForFields(container) {
+    const fields = [];
+    let fieldCounter = 1;
+
+    // Root container class
+    const containerClasses = Array.from(container.classList).join('.');
+    const baseSelector = container.tagName.toLowerCase() + (containerClasses ? '.' + containerClasses : '');
+
+    // Look for links
+    const links = container.querySelectorAll('a');
+    if (links.length > 0) {
+        fields.push({
+            name: "Link URL",
+            selector: baseSelector + ' a',
+            extractType: 'href'
+        });
+
+        if (links[0].innerText.trim()) {
+            fields.push({
+                name: "Link Text",
+                selector: baseSelector + ' a',
+                extractType: 'text'
+            });
+        }
+    }
+
+    // Look for images
+    const images = container.querySelectorAll('img');
+    if (images.length > 0) {
+        fields.push({
+            name: "Image Source",
+            selector: baseSelector + ' img',
+            extractType: 'src'
+        });
+    }
+
+    // Look for headings (Titles)
+    const headings = container.querySelectorAll('h1, h2, h3, h4, h5');
+    if (headings.length > 0) {
+        fields.push({
+            name: "Title",
+            selector: baseSelector + ' ' + headings[0].tagName.toLowerCase(),
+            extractType: 'text'
+        });
+    }
+
+    // Look for spans/divs with text (prices, descriptions)
+    const textNodes = container.querySelectorAll('span, div, p');
+    textNodes.forEach(node => {
+        const text = node.innerText.trim();
+        if (text && text.length > 0 && text.length < 100) {
+            if (text.match(/^[\$€£]?\s*\d+[.,]?\d*\s*$/) || Array.from(node.classList).some(c => c.toLowerCase().includes('price') || c.toLowerCase().includes('title'))) {
+                const nodeClass = Array.from(node.classList).join('.');
+                if (nodeClass) {
+                    const sel = baseSelector + ' ' + node.tagName.toLowerCase() + '.' + nodeClass;
+                    if (!fields.some(f => f.selector === sel)) {
+                        fields.push({
+                            name: `Data ${fieldCounter++}`,
+                            selector: sel,
+                            extractType: 'text'
+                        });
+                    }
+                }
+            }
+        }
     });
 
-    document.body.appendChild(uiPanel);
+    if (fields.length === 0) {
+        fields.push({
+            name: "Item Text",
+            selector: baseSelector,
+            extractType: 'text'
+        });
+    }
+
+    return fields;
+}
+
+function createAutoDetectUIPanel() {
+    const ui = document.createElement('div');
+    ui.id = 'ai-digger-auto-ui';
+    ui.style.position = 'fixed';
+    ui.style.bottom = '20px';
+    ui.style.right = '20px';
+    ui.style.zIndex = '1000000';
+    ui.style.background = '#8b5cf6';
+    ui.style.color = 'white';
+    ui.style.padding = '12px 20px';
+    ui.style.borderRadius = '8px';
+    ui.style.fontFamily = 'sans-serif';
+    ui.style.boxShadow = '0 10px 25px rgba(0,0,0,0.2)';
+    ui.innerHTML = `
+        <div style="font-weight: bold; margin-bottom: 4px;">✨ Auto-Detect Mode</div>
+        <div style="font-size: 12px; margin-bottom: 8px;">Click on a repeating item (like a product card or list row) to auto-generate selectors.</div>
+        <button id="ai-digger-cancel-auto" style="background: white; color: #8b5cf6; border: none; padding: 6px 12px; border-radius: 4px; cursor: pointer; font-weight: bold; font-size: 12px;">Cancel</button>
+    `;
+    document.body.appendChild(ui);
+    document.getElementById('ai-digger-cancel-auto').addEventListener('click', stopAutoDetect);
+}
+
+// Generates a robust XPath
+function generateXPath(el) {
+    if (el.id !== '') {
+        return '//*[@id="' + el.id + '"]';
+    }
+    if (el === document.body) {
+        return '/html/body';
+    }
+
+    let ix = 0;
+    const siblings = el.parentNode.childNodes;
+    for (let i = 0; i < siblings.length; i++) {
+        const sibling = siblings[i];
+        if (sibling === el) {
+            return generateXPath(el.parentNode) + '/' + el.tagName.toLowerCase() + '[' + (ix + 1) + ']';
+        }
+        if (sibling.nodeType === 1 && sibling.tagName === el.tagName) {
+            ix++;
+        }
+    }
 }
 
 
@@ -168,35 +417,131 @@ function createUIPanel() {
 // PHASE 3/4: EXTRACTION ENGINE
 // ==========================================
 
+function formatValue(val, formatType) {
+    if (!val || typeof val !== 'string') return val;
+
+    switch (formatType) {
+        case 'numbers':
+            return val.replace(/[^0-9.]/g, '');
+        case 'letters':
+            return val.replace(/[^a-zA-Z\s]/g, '').trim();
+        case 'email':
+            const match = val.match(/([a-zA-Z0-9._-]+@[a-zA-Z0-9._-]+\.[a-zA-Z0-9_-]+)/);
+            return match ? match[1] : '';
+        case 'trim':
+            return val.replace(/\s+/g, ' ').trim();
+        case 'raw':
+        default:
+            return val;
+    }
+}
+
+function waitForElement(selector, timeoutMs = 15000) {
+    return new Promise((resolve) => {
+        let el = null;
+        try {
+            if (selector.startsWith('//') || selector.startsWith('(')) {
+                el = document.evaluate(selector, document, null, XPathResult.FIRST_ORDERED_NODE_TYPE, null).singleNodeValue;
+            } else {
+                el = document.querySelector(selector);
+            }
+        } catch(e) {}
+
+        if (el) return resolve(true);
+
+        const observer = new MutationObserver(() => {
+            let found = null;
+            try {
+                if (selector.startsWith('//') || selector.startsWith('(')) {
+                    found = document.evaluate(selector, document, null, XPathResult.FIRST_ORDERED_NODE_TYPE, null).singleNodeValue;
+                } else {
+                    found = document.querySelector(selector);
+                }
+            } catch(e) {}
+
+            if (found) {
+                observer.disconnect();
+                resolve(true);
+            }
+        });
+
+        observer.observe(document.body, { childList: true, subtree: true });
+
+        setTimeout(() => {
+            observer.disconnect();
+            resolve(false);
+        }, timeoutMs);
+    });
+}
+
+function extractFieldData(field) {
+    if (field.type === 'ai') return null; // AI handled in background
+
+    try {
+        let elements = [];
+
+        if (field.type === 'xpath') {
+            const xpathResult = document.evaluate(field.selector, document, null, XPathResult.ORDERED_NODE_SNAPSHOT_TYPE, null);
+            for (let i = 0; i < xpathResult.snapshotLength; i++) {
+                elements.push(xpathResult.snapshotItem(i));
+            }
+        } else {
+            elements = Array.from(document.querySelectorAll(field.selector));
+        }
+
+        if (elements.length === 0) {
+            return field.multiple ? [] : null;
+        }
+
+        // Define extraction helper function
+        const extractValue = (el) => {
+            let val = "";
+            if (field.extractType === 'text') {
+                val = el.innerText ? el.innerText.trim() : "";
+            } else if (field.extractType === 'html') {
+                val = el.innerHTML;
+            } else if (field.extractType === 'href' || field.extractType === 'src') {
+                val = el.getAttribute(field.extractType) || "";
+            } else if (field.extractType === 'attribute' && field.attributeName) {
+                val = el.getAttribute(field.attributeName) || "";
+            } else {
+                val = el.innerText ? el.innerText.trim() : "";
+            }
+            return formatValue(val, field.format);
+        };
+
+        if (field.multiple) {
+            return elements.map(extractValue);
+        } else {
+            return extractValue(elements[0]);
+        }
+
+    } catch (e) {
+        console.error(`Error extracting field ${field.name}:`, e);
+        return "ERROR";
+    }
+}
+
 function executeExtraction(blueprint) {
     const result = {};
     result['URL'] = window.location.href;
     result['Timestamp'] = new Date().toISOString();
 
-    blueprint.fields.forEach(field => {
-        try {
-            const elements = document.querySelectorAll(field.selector);
-            if (elements.length === 0) {
-                result[field.name] = null;
-                return;
-            }
+    let needsAi = false;
 
-            // For simplicity, we grab the first matching element per page for now.
-            // If the user wants a list (e.g., all products on a page), we'd iterate here.
-            const el = elements[0];
-            
-            if (field.type === 'text') {
-                result[field.name] = el.innerText.trim();
-            } else if (field.type === 'attribute' && field.attributeName) {
-                result[field.name] = el.getAttribute(field.attributeName);
-            } else if (field.type === 'html') {
-                result[field.name] = el.innerHTML;
-            }
-        } catch (e) {
-            console.error(`Error extracting field ${field.name}:`, e);
-            result[field.name] = "ERROR";
+    blueprint.fields.forEach(field => {
+        if (field.type === 'ai') {
+            needsAi = true;
+            return;
         }
+        result[field.name] = extractFieldData(field);
     });
 
+    if (needsAi) {
+        // Send page text back as a special field
+        result['_pageText'] = document.body.innerText.trim();
+    }
+
     return result;
+}
 }
