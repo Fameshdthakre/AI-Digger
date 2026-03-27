@@ -226,7 +226,39 @@ async function scrapeTab(tabId, job, url) {
 }
 
 function saveExtractedData(data) {
-    scrapedData.push(data);
+    // Check if any field returned an array (multiple items)
+    let maxArrayLength = 0;
+    const arrayFields = [];
+    const scalarFields = [];
+
+    for (const [key, value] of Object.entries(data)) {
+        if (Array.isArray(value)) {
+            arrayFields.push(key);
+            if (value.length > maxArrayLength) {
+                maxArrayLength = value.length;
+            }
+        } else {
+            scalarFields.push(key);
+        }
+    }
+
+    if (maxArrayLength > 0) {
+        // Unpivot/Transpose arrays into individual rows
+        for (let i = 0; i < maxArrayLength; i++) {
+            const row = {};
+            // Copy scalar values (like URL, Timestamp, or non-multiple fields)
+            scalarFields.forEach(key => row[key] = data[key]);
+            // Copy array values for this index
+            arrayFields.forEach(key => {
+                row[key] = data[key][i] !== undefined ? data[key][i] : null;
+            });
+            scrapedData.push(row);
+        }
+    } else {
+        // No arrays, just push the single row
+        scrapedData.push(data);
+    }
+
     chrome.storage.local.set({ scrapedData: scrapedData });
 }
 
@@ -246,7 +278,8 @@ async function processAIExtraction(blueprint, text) {
     let prompt = "Extract the following information from the text provided below. Return ONLY a valid JSON object where the keys are the Field Names exactly as requested. Do not wrap in markdown tags or add explanations.\n\n";
     prompt += "Fields to extract:\n";
     aiFields.forEach(f => {
-        prompt += `- "${f.name}": ${f.selector}\n`;
+        let typeHint = f.multiple ? " (Must return an array of strings)" : " (Return a single string)";
+        prompt += `- "${f.name}": ${f.selector}${typeHint}\n`;
     });
 
     // Truncate text to avoid token limits roughly

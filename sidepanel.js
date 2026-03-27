@@ -252,9 +252,6 @@ function addActionRow(type = 'click', selector = '', text = '') {
 
 document.getElementById('add-action').addEventListener('click', () => addActionRow());
 
-// Adjust inspector listener to handle action row specific mapping
-const originalInspectorListener = chrome.runtime.onMessage.hasListeners() ? null : null; // Hacky check if we need to modify it. We will modify the main listener.
-
 document.getElementById('add-field').addEventListener('click', () => addFieldRow());
 
 // Auto-Detect Logic
@@ -352,13 +349,14 @@ loadDefaultFields();
 // === Saved Jobs Logic ===
 let savedJobs = {};
 
-function updateSavedJobsDropdown() {
+function updateSavedJobsDropdown(selectedJobName = null) {
     const select = document.getElementById('saved-jobs-select');
-    select.innerHTML = '<option value="">-- Select a saved job --</option>';
+    select.innerHTML = '<option value="">-- Create a new job --</option>';
     for (const jobName in savedJobs) {
         const option = document.createElement('option');
         option.value = jobName;
         option.innerText = jobName;
+        if (jobName === selectedJobName) option.selected = true;
         select.appendChild(option);
     }
 }
@@ -407,22 +405,39 @@ function getBlueprintFromUI() {
 document.getElementById('btn-save-job').addEventListener('click', () => {
     const blueprint = getBlueprintFromUI();
     if (!blueprint.jobName) {
-        alert("Please enter a Job Name to save.");
+        alert("Please enter a Job Name in the text box below to save it.");
         return;
     }
     savedJobs[blueprint.jobName] = blueprint;
     chrome.storage.local.set({ savedJobs: savedJobs }, () => {
-        updateSavedJobsDropdown();
-        document.getElementById('saved-jobs-select').value = blueprint.jobName;
-        alert(`Job "${blueprint.jobName}" saved!`);
+        updateSavedJobsDropdown(blueprint.jobName);
+        const btn = document.getElementById('btn-save-job');
+        const origText = btn.innerText;
+        btn.innerText = 'Saved!';
+        btn.style.backgroundColor = '#10b981'; // Green
+        btn.style.borderColor = '#10b981';
+        setTimeout(() => {
+            btn.innerText = origText;
+            btn.style.backgroundColor = '';
+            btn.style.borderColor = '';
+        }, 2000);
     });
 });
 
-document.getElementById('btn-load-job').addEventListener('click', () => {
-    const jobName = document.getElementById('saved-jobs-select').value;
-    if (!jobName || !savedJobs[jobName]) return;
+document.getElementById('saved-jobs-select').addEventListener('change', (e) => {
+    const jobName = e.target.value;
+    if (!jobName) {
+        // Reset to default new state
+        document.getElementById('job-name').value = "My Scraper Job";
+        document.getElementById('url-list').value = "";
+        actionsContainer.innerHTML = '';
+        actionCount = 0;
+        loadDefaultFields();
+        return;
+    }
 
     const blueprint = savedJobs[jobName];
+    if (!blueprint) return;
 
     // Set Basic Info
     document.getElementById('job-name').value = blueprint.jobName;
