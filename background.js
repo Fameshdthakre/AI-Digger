@@ -56,6 +56,13 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
             chrome.runtime.sendMessage({ action: 'AI_ANALYZE_RESULT', error: err.message });
         });
         sendResponse({ status: 'analyzing' });
+    } else if (message.action === 'MAGIC_BUILD_BLUEPRINT') {
+        generateBlueprintWithAI(message.userPrompt, message.pageText).then(blueprint => {
+            chrome.runtime.sendMessage({ action: 'MAGIC_BUILD_RESULT', blueprint: blueprint });
+        }).catch(err => {
+            chrome.runtime.sendMessage({ action: 'MAGIC_BUILD_RESULT', error: err.message });
+        });
+        sendResponse({ status: 'building' });
     }
     return true; // Keep message channel open for async responses
 });
@@ -699,6 +706,112 @@ async function analyzePageWithAI(text) {
         return parsed;
     } catch (e) {
         console.error("Failed to parse AI Analyze response as JSON", resultJsonStr);
+        throw new Error("AI returned invalid JSON format.");
+    }
+}
+
+// Helper: Magic Build Caller
+async function generateBlueprintWithAI(userPrompt, text) {
+    const settingsObj = await chrome.storage.sync.get(['aiSettings']);
+    const settings = settingsObj.aiSettings;
+
+    if (!settings || !settings.aiPlatform) {
+        throw new Error("AI Platform not configured in settings. Please setup your API keys in the Settings tab.");
+    }
+
+    const systemPrompt = `You are an expert web scraping assistant. I will provide you with a user's natural language request and the text/markdown content of a webpage.
+    Your goal is to generate a complete scraping job blueprint based on their request.
+
+    Return your response strictly as a JSON object matching this exact schema. Do not wrap in markdown tags:
+    {
+      "jobName": "A descriptive name (string)",
+      "scrapingType": "single-page" or "multi-url",
+      "singlePageOptions": {
+        "nextButtonSelector": "CSS or XPath for the next page button, or empty string",
+        "maxPages": integer (default to 5 if pagination is requested, else 1),
+        "infiniteScroll": boolean,
+        "maxScrolls": integer (default 5)
+      },
+      "fields": [
+        {
+          "name": "Field Name",
+          "selector": "CSS/XPath selector or AI prompt",
+          "type": "css", "xpath", or "ai",
+          "extractType": "text", "html", "href", "src", or "attribute",
+          "multiple": boolean (true if extracting a list/array of items)
+        }
+      ]
+    }`;
+
+    const truncatedText = text.substring(0, 20000);
+    const prompt = `${systemPrompt}\n\nUser Request:\n"${userPrompt}"\n\nWebpage Markdown:\n"""\n${truncatedText}\n"""`;
+
+    let resultJsonStr = "{}";
+
+    if (settings.aiPlatform === 'openai') {
+        const apiKey = settings.openai.key;
+        const model = settings.openai.model || 'gpt-4o';
+        if (!apiKey) throw new Error("OpenAI API key missing.");
+
+        const response = await fetch('https://api.openai.com/v1/chat/completions', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${apiKey}` },
+            body: JSON.stringify({
+                model: model,
+                messages: [{ role: "user", content: prompt }],
+                temperature: 0.1,
+                response_format: { type: "json_object" }
+            })
+        });
+        if (!response.ok) throw new Error(`OpenAI API error: ${response.statusText}`);
+        const data = await response.json();
+        resultJsonStr = data.choices[0].message.content;
+
+    } else if (settings.aiPlatform === 'gemini') {
+        const apiKey = settings.gemini.key;
+        const model = settings.gemini.model || 'gemini-2.5-flash';
+        if (!apiKey) throw new Error("Gemini API key missing.");
+
+        const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                contents: [{ parts: [{ text: prompt }] }],
+                generationConfig: { responseMimeType: "application/json" }
+            })
+        });
+        if (!response.ok) throw new Error(`Gemini API error: ${response.statusText}`);
+        const data = await response.json();
+        resultJsonStr = data.candidates[0].content.parts[0].text;
+
+    } else if (settings.aiPlatform === 'claude') {
+        const apiKey = settings.claude.key;
+        const model = settings.claude.model || 'claude-3-5-sonnet-20241022';
+        if (!apiKey) throw new Error("Claude API key missing.");
+
+        const response = await fetch('https://api.anthropic.com/v1/messages', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'x-api-key': apiKey,
+                'anthropic-version': '2023-06-01'
+            },
+            body: JSON.stringify({
+                model: model,
+                max_tokens: 1024,
+                messages: [{ role: "user", content: prompt }]
+            })
+        });
+        if (!response.ok) throw new Error(`Claude API error: ${response.statusText}`);
+        const data = await response.json();
+        resultJsonStr = data.content[0].text;
+    }
+
+    try {
+        const cleanStr = resultJsonStr.replace(/^```json/i, '').replace(/```$/, '').trim();
+        return JSON.parse(cleanStr);
+    } catch (e) {
+        console.error("Failed to parse Magic Build response as JSON", resultJsonStr);
         throw new Error("AI returned invalid JSON format.");
     }
 }
