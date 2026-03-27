@@ -99,8 +99,11 @@
                     </select>
                     <button id="btn-save-job" class="btn btn-primary" style="width: auto; padding: 6px 10px; font-size: 12px; margin-left: 8px;">Save Current</button>
                     <button id="btn-delete-job" class="btn btn-danger" style="width: auto; padding: 6px 10px; font-size: 12px; margin-left: 8px;">Delete</button>
+                    <button id="btn-export-job" class="btn btn-outline" style="width: auto; padding: 6px 10px; font-size: 12px; margin-left: 4px;">Export</button>
+                    <button id="btn-import-job" class="btn btn-outline" style="width: auto; padding: 6px 10px; font-size: 12px; margin-left: 4px;">Import</button>
                 </div>
             </div>
+            <input type="file" id="import-file-input" accept=".json" style="display: none;" />
 
             <div class="card">
                 <div class="form-group">
@@ -184,6 +187,9 @@
 
             <div class="card">
                 <label>Anti-Bot Settings (Delays)</label>
+                <label class="checkbox-label" style="font-size: 12px; font-weight: 600; color: var(--text-main); margin-top: 8px;">
+                    <input type="checkbox" id="enable-stealth-mode" /> Enable Human Stealth Emulation (Mouse/Scroll Jitters)
+                </label>
                 <div class="flex mt-2">
                     <div class="flex-1">
                         <label>Min Delay (ms)</label>

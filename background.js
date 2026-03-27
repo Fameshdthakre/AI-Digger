@@ -153,6 +153,11 @@ async function processNextStep() {
             await ensureScriptInjected(tab.id);
             await executeActions(tab.id, blueprint.actions);
 
+            if (blueprint.antiBot?.stealthMode) {
+                addLog("Executing stealth human emulation...");
+                await chrome.tabs.sendMessage(tab.id, { action: 'SIMULATE_STEALTH' }).catch(() => null);
+            }
+
             let extractedData = await scrapeTab(tab.id, blueprint, url);
             if (extractedData) saveExtractedData(extractedData);
 
@@ -228,6 +233,11 @@ async function processNextStep() {
                     addLog("No 'Next Button' selector provided. Stopping pagination.");
                     completeJob();
                     return;
+                }
+
+                if (blueprint.antiBot?.stealthMode) {
+                    addLog("Executing stealth human emulation before navigating...");
+                    await chrome.tabs.sendMessage(tabId, { action: 'SIMULATE_STEALTH' }).catch(() => null);
                 }
 
                 addLog(`Clicking next page...`);

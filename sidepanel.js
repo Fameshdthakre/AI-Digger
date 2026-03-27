@@ -525,6 +525,7 @@ function getBlueprintFromUI() {
             format: row.querySelector('.f-format') ? row.querySelector('.f-format').value : 'raw'
         })).filter(f => f.name && f.selector),
         antiBot: {
+            stealthMode: document.getElementById('enable-stealth-mode').checked,
             minDelayMs: parseInt(document.getElementById('min-delay').value),
             maxDelayMs: parseInt(document.getElementById('max-delay').value),
             batchSize: parseInt(document.getElementById('batch-size').value),
@@ -586,10 +587,13 @@ document.getElementById('saved-jobs-select').addEventListener('change', (e) => {
 
     // Set Anti-Bot
     if (blueprint.antiBot) {
+        document.getElementById('enable-stealth-mode').checked = blueprint.antiBot.stealthMode || false;
         document.getElementById('min-delay').value = blueprint.antiBot.minDelayMs || 2000;
         document.getElementById('max-delay').value = blueprint.antiBot.maxDelayMs || 5000;
         document.getElementById('batch-size').value = blueprint.antiBot.batchSize || 10;
         document.getElementById('batch-pause').value = blueprint.antiBot.batchPauseMs || 10000;
+    } else {
+        document.getElementById('enable-stealth-mode').checked = false;
     }
 
     // Set Single Page Options
@@ -637,6 +641,61 @@ document.getElementById('btn-delete-job').addEventListener('click', () => {
             alert("Job deleted.");
         });
     }
+});
+
+// Import / Export Blueprint Logic
+document.getElementById('btn-export-job').addEventListener('click', () => {
+    const jobName = document.getElementById('saved-jobs-select').value;
+    if (!jobName || !savedJobs[jobName]) {
+        alert("Please select a saved job to export.");
+        return;
+    }
+    const blueprint = savedJobs[jobName];
+    const jsonStr = JSON.stringify(blueprint, null, 2);
+    const blob = new Blob([jsonStr], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+
+    chrome.downloads.download({
+        url: url,
+        filename: `${jobName}_blueprint.json`,
+        saveAs: true
+    });
+});
+
+document.getElementById('btn-import-job').addEventListener('click', () => {
+    document.getElementById('import-file-input').click();
+});
+
+document.getElementById('import-file-input').addEventListener('change', (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = (event) => {
+        try {
+            const importedBlueprint = JSON.parse(event.target.result);
+            if (!importedBlueprint.jobName || !importedBlueprint.fields || !Array.isArray(importedBlueprint.fields)) {
+                throw new Error("Invalid blueprint format. Missing 'jobName' or 'fields' array.");
+            }
+
+            savedJobs[importedBlueprint.jobName] = importedBlueprint;
+            chrome.storage.local.set({ savedJobs: savedJobs }, () => {
+                updateSavedJobsDropdown(importedBlueprint.jobName);
+
+                // Programmatically trigger the change event to populate the UI
+                const select = document.getElementById('saved-jobs-select');
+                select.dispatchEvent(new Event('change'));
+
+                alert(`Successfully imported job: ${importedBlueprint.jobName}`);
+            });
+        } catch (err) {
+            alert(`Failed to import blueprint: ${err.message}`);
+        }
+
+        // Reset the file input so the same file can be imported again if needed
+        e.target.value = '';
+    };
+    reader.readAsText(file);
 });
 
 
