@@ -672,9 +672,8 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
                 document.getElementById('scrape-mode').dispatchEvent(new Event('change'));
             }
 
-            if (bp.containerSelector) {
-                document.getElementById('item-container-selector').value = bp.containerSelector;
-            }
+            document.getElementById('item-container-selector').value = bp.containerSelector || '';
+            updateUISafeguards();
 
             if (bp.singlePageOptions) {
                 if (bp.singlePageOptions.nextButtonSelector) {
@@ -750,6 +749,11 @@ const DEFAULT_RECIPES = {
         scrapingType: "single-page",
         outputFormat: "flat",
         primaryKeyField: "Product Title",
+        detailUrlField: "Product Link",
+        linkedDetailJob: "",
+        maxDetailPages: 10,
+        urls: "",
+        webhookUrl: "",
         containerSelector: "div[data-component-type='s-search-result']",
         singlePageOptions: {
             nextButtonSelector: "a.s-pagination-next",
@@ -757,10 +761,11 @@ const DEFAULT_RECIPES = {
             infiniteScroll: false,
             maxScrolls: 5
         },
+        schedule: { enabled: false, interval: 60, targetMode: "active-tab", startUrl: "", multipleUrls: "" },
         fields: [
-            { name: "Product Title", selector: "h2 a span", type: "css", extractType: "text", multiple: false, format: "raw" },
-            { name: "Price", selector: ".a-price-whole", type: "css", extractType: "text", multiple: false, format: "raw" },
-            { name: "Product Link", selector: "h2 a", type: "css", extractType: "href", multiple: false, format: "raw" }
+            { name: "Product Title", selector: "h2 a span", type: "css", extractType: "text", multiple: false, format: "raw", attributeName: "" },
+            { name: "Price", selector: ".a-price-whole", type: "css", extractType: "text", multiple: false, format: "raw", attributeName: "" },
+            { name: "Product Link", selector: "h2 a", type: "css", extractType: "href", multiple: false, format: "raw", attributeName: "" }
         ],
         actions: [],
         antiBot: { stealthMode: true, minDelayMs: 3000, maxDelayMs: 6000, batchSize: 10, batchPauseMs: 10000 }
@@ -770,12 +775,18 @@ const DEFAULT_RECIPES = {
         scrapingType: "single-page",
         outputFormat: "flat",
         primaryKeyField: "Company Name",
+        detailUrlField: "Website",
+        linkedDetailJob: "",
+        maxDetailPages: 10,
+        urls: "",
+        webhookUrl: "",
         containerSelector: ".org-top-card-summary-info-list",
-        singlePageOptions: { maxPages: 1, infiniteScroll: false },
+        singlePageOptions: { maxPages: 1, infiniteScroll: false, maxScrolls: 5, nextButtonSelector: "" },
+        schedule: { enabled: false, interval: 60, targetMode: "active-tab", startUrl: "", multipleUrls: "" },
         fields: [
-            { name: "Company Name", selector: "h1", type: "css", extractType: "text", multiple: false, format: "raw" },
-            { name: "Website", selector: "a.link-without-visited-state", type: "css", extractType: "href", multiple: false, format: "raw" },
-            { name: "Industry", selector: ".org-top-card-summary-info-list__info-item", type: "css", extractType: "text", multiple: false, format: "raw" }
+            { name: "Company Name", selector: "h1", type: "css", extractType: "text", multiple: false, format: "raw", attributeName: "" },
+            { name: "Website", selector: "a.link-without-visited-state", type: "css", extractType: "href", multiple: false, format: "raw", attributeName: "" },
+            { name: "Industry", selector: ".org-top-card-summary-info-list__info-item", type: "css", extractType: "text", multiple: false, format: "raw", attributeName: "" }
         ],
         actions: [],
         antiBot: { stealthMode: true, minDelayMs: 2000, maxDelayMs: 5000, batchSize: 10, batchPauseMs: 10000 }
@@ -785,17 +796,24 @@ const DEFAULT_RECIPES = {
         scrapingType: "single-page",
         outputFormat: "flat",
         primaryKeyField: "Article Title",
+        detailUrlField: "Link",
+        linkedDetailJob: "",
+        maxDetailPages: 10,
+        urls: "",
+        webhookUrl: "",
         containerSelector: "article",
         singlePageOptions: {
             nextButtonSelector: "a.next, .pagination-next",
             maxPages: 5,
-            infiniteScroll: false
+            infiniteScroll: false,
+            maxScrolls: 5
         },
+        schedule: { enabled: false, interval: 60, targetMode: "active-tab", startUrl: "", multipleUrls: "" },
         fields: [
-            { name: "Article Title", selector: "h2", type: "css", extractType: "text", multiple: false, format: "raw" },
-            { name: "Author", selector: ".author", type: "css", extractType: "text", multiple: false, format: "raw" },
-            { name: "Publish Date", selector: "time", type: "css", extractType: "text", multiple: false, format: "raw" },
-            { name: "Link", selector: "a", type: "css", extractType: "href", multiple: false, format: "raw" }
+            { name: "Article Title", selector: "h2", type: "css", extractType: "text", multiple: false, format: "raw", attributeName: "" },
+            { name: "Author", selector: ".author", type: "css", extractType: "text", multiple: false, format: "raw", attributeName: "" },
+            { name: "Publish Date", selector: "time", type: "css", extractType: "text", multiple: false, format: "raw", attributeName: "" },
+            { name: "Link", selector: "a", type: "css", extractType: "href", multiple: false, format: "raw", attributeName: "" }
         ],
         actions: [],
         antiBot: { stealthMode: false, minDelayMs: 1000, maxDelayMs: 3000, batchSize: 0, batchPauseMs: 10000 }
