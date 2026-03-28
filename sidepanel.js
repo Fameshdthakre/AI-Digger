@@ -1,5 +1,92 @@
 // === UI Logic ===
 
+// Toast Notification System
+function showToast(message, type = 'success') {
+    const container = document.getElementById('toast-container');
+    if (!container) return;
+
+    const toast = document.createElement('div');
+    toast.className = `toast ${type}`;
+    toast.innerText = message;
+
+    container.appendChild(toast);
+
+    // Trigger animation
+    setTimeout(() => {
+        toast.classList.add('show');
+    }, 10);
+
+    // Remove after 3 seconds
+    setTimeout(() => {
+        toast.classList.remove('show');
+        setTimeout(() => {
+            if (container.contains(toast)) container.removeChild(toast);
+        }, 300); // Wait for transition
+    }, 3000);
+}
+
+// Subtitle Updaters
+function updateActionSubtitle() {
+    const subtitle = document.getElementById('subtitle-actions');
+    if (!subtitle) return;
+    const actions = document.querySelectorAll('#actions-container .field-row');
+    subtitle.innerText = actions.length > 0 ? `${actions.length} action(s)` : 'None';
+}
+
+function updatePaginationSubtitle() {
+    const subtitle = document.getElementById('subtitle-pagination');
+    if (!subtitle) return;
+    const nextBtn = document.getElementById('next-button-selector').value;
+    const maxPages = document.getElementById('max-pages').value;
+    const infScroll = document.getElementById('enable-infinite-scroll').checked;
+
+    let parts = [];
+    if (nextBtn) parts.push(`Up to ${maxPages} pages`);
+    if (infScroll) parts.push('Scroll first');
+
+    subtitle.innerText = parts.length > 0 ? parts.join(', ') : 'No pagination';
+}
+
+function updateScheduleSubtitle() {
+    const subtitle = document.getElementById('subtitle-schedule');
+    if (!subtitle) return;
+    const enabled = document.getElementById('enable-schedule').checked;
+    const intervalSelect = document.getElementById('schedule-interval');
+    if (enabled) {
+        const text = intervalSelect.options[intervalSelect.selectedIndex].text;
+        subtitle.innerText = text;
+        subtitle.style.color = '#10b981'; // green indicator
+    } else {
+        subtitle.innerText = 'Off';
+        subtitle.style.color = '';
+    }
+}
+
+function updateAntiBotSubtitle() {
+    const subtitle = document.getElementById('subtitle-antibot');
+    if (!subtitle) return;
+    const stealth = document.getElementById('enable-stealth-mode').checked;
+    const min = document.getElementById('min-delay').value;
+    const max = document.getElementById('max-delay').value;
+    subtitle.innerText = `Stealth ${stealth ? 'On' : 'Off'}, ${(min/1000).toFixed(1)}-${(max/1000).toFixed(1)}s`;
+}
+
+// Bind subtitle updaters to inputs
+document.getElementById('next-button-selector').addEventListener('input', updatePaginationSubtitle);
+document.getElementById('max-pages').addEventListener('input', updatePaginationSubtitle);
+document.getElementById('enable-infinite-scroll').addEventListener('change', updatePaginationSubtitle);
+
+document.getElementById('enable-schedule').addEventListener('change', updateScheduleSubtitle);
+document.getElementById('schedule-interval').addEventListener('change', updateScheduleSubtitle);
+
+document.getElementById('enable-stealth-mode').addEventListener('change', updateAntiBotSubtitle);
+document.getElementById('min-delay').addEventListener('input', updateAntiBotSubtitle);
+document.getElementById('max-delay').addEventListener('input', updateAntiBotSubtitle);
+
+// Create observer for actions container to update subtitle when actions are added/removed
+const actionsObserver = new MutationObserver(updateActionSubtitle);
+actionsObserver.observe(document.getElementById('actions-container'), { childList: true });
+
 // Tab Switching
 document.querySelectorAll('.tab').forEach(tab => {
     tab.addEventListener('click', () => {
@@ -484,7 +571,7 @@ document.getElementById('btn-generate-blueprint').addEventListener('click', asyn
     const btn = document.getElementById('btn-generate-blueprint');
     const promptText = document.getElementById('nl-prompt').value;
     if (!promptText) {
-        alert("Please enter a description of what you want to scrape.");
+        showToast("Please enter a description of what you want to scrape.", "error");
         return;
     }
 
@@ -507,7 +594,7 @@ document.getElementById('btn-generate-blueprint').addEventListener('click', asyn
         } else {
             btn.innerText = 'Generate Blueprint';
             btn.disabled = false;
-            alert("Could not extract text from page to analyze.");
+            showToast("Could not extract text from page to analyze.", "error");
         }
     });
 });
@@ -556,7 +643,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         btn.disabled = false;
 
         if (message.error) {
-            alert(`AI Analysis failed: ${message.error}`);
+            showToast(`AI Analysis failed: ${message.error}`, "error");
         } else if (message.fields && message.fields.length > 0) {
             fieldsContainer.innerHTML = '';
             fieldCount = 0;
@@ -574,7 +661,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         btn.disabled = false;
 
         if (message.error) {
-            alert(`Magic Build failed: ${message.error}`);
+            showToast(`Magic Build failed: ${message.error}`, "error");
         } else if (message.blueprint) {
             const bp = message.blueprint;
 
@@ -639,7 +726,7 @@ document.getElementById('btn-ai-analyze').addEventListener('click', async () => 
         } else {
             btn.innerText = '🤖 AI Analysis';
             btn.disabled = false;
-            alert("Could not extract text from page to analyze.");
+            showToast("Could not extract text from page to analyze.", "error");
         }
     });
 });
@@ -822,15 +909,15 @@ function getBlueprintFromUI() {
     };
 }
 
-document.getElementById('btn-save-job').addEventListener('click', () => {
+function handleSaveJobClick(btnElement) {
     const blueprint = getBlueprintFromUI();
     if (!blueprint.jobName) {
-        alert("Please enter a Job Name in the text box below to save it.");
+        showToast("Please enter a Job Name in the text box below to save it.", "error");
         return;
     }
 
     if (blueprint.jobName.startsWith("[Template]")) {
-        alert("You cannot overwrite a Template. Please use the 'Clone' button or change the Job Name.");
+        showToast("You cannot overwrite a Template. Please use the 'Clone' button or change the Job Name.", "error");
         return;
     }
 
@@ -849,18 +936,22 @@ document.getElementById('btn-save-job').addEventListener('click', () => {
         // Notify background to update schedules
         chrome.runtime.sendMessage({ action: 'UPDATE_SCHEDULES' });
 
-        const btn = document.getElementById('btn-save-job');
-        const origText = btn.innerText;
-        btn.innerText = 'Saved!';
-        btn.style.backgroundColor = '#10b981'; // Green
-        btn.style.borderColor = '#10b981';
+        const origText = btnElement.innerText;
+        btnElement.innerText = 'Saved!';
+        btnElement.style.backgroundColor = '#10b981'; // Green
+        btnElement.style.borderColor = '#10b981';
+        btnElement.style.color = '#ffffff';
         setTimeout(() => {
-            btn.innerText = origText;
-            btn.style.backgroundColor = '';
-            btn.style.borderColor = '';
+            btnElement.innerText = origText;
+            btnElement.style.backgroundColor = '';
+            btnElement.style.borderColor = '';
+            btnElement.style.color = '';
         }, 2000);
+        showToast(`Job "${blueprint.jobName}" saved successfully.`, "success");
     });
-});
+}
+
+document.getElementById('btn-save-job-footer').addEventListener('click', function() { handleSaveJobClick(this); });
 
 document.getElementById('saved-jobs-select').addEventListener('change', (e) => {
     const jobName = e.target.value;
@@ -971,10 +1062,13 @@ document.getElementById('saved-jobs-select').addEventListener('change', (e) => {
 
 document.getElementById('btn-delete-job').addEventListener('click', () => {
     const jobName = document.getElementById('saved-jobs-select').value;
-    if (!jobName || !savedJobs[jobName]) return;
+    if (!jobName || !savedJobs[jobName]) {
+        showToast("Please select a job to delete.", "info");
+        return;
+    }
 
     if (jobName.startsWith("[Template]")) {
-        alert("Templates cannot be deleted.");
+        showToast("Templates cannot be deleted.", "error");
         return;
     }
 
@@ -991,7 +1085,7 @@ document.getElementById('btn-delete-job').addEventListener('click', () => {
             // Reset to default new state
             document.getElementById('saved-jobs-select').value = "";
             document.getElementById('saved-jobs-select').dispatchEvent(new Event('change'));
-            alert("Job deleted.");
+            showToast("Job deleted.", "success");
         });
     }
 });
@@ -999,7 +1093,7 @@ document.getElementById('btn-delete-job').addEventListener('click', () => {
 document.getElementById('btn-clone-job').addEventListener('click', () => {
     const jobName = document.getElementById('saved-jobs-select').value;
     if (!jobName || !savedJobs[jobName]) {
-        alert("Please select a job to clone.");
+        showToast("Please select a job to clone.", "info");
         return;
     }
 
@@ -1015,14 +1109,14 @@ document.getElementById('btn-clone-job').addEventListener('click', () => {
     // Switch dropdown to "Create a new job" so saving will create a new entry
     document.getElementById('saved-jobs-select').value = "";
 
-    alert(`Job cloned as "${clonedName}". Please make your changes and click "Save Current".`);
+    showToast(`Job cloned as "${clonedName}". Click Save.`, "success");
 });
 
 // Import / Export Blueprint Logic
 document.getElementById('btn-export-job').addEventListener('click', () => {
     const jobName = document.getElementById('saved-jobs-select').value;
     if (!jobName || !savedJobs[jobName]) {
-        alert("Please select a saved job to export.");
+        showToast("Please select a saved job to export.", "info");
         return;
     }
     const blueprint = savedJobs[jobName];
@@ -1061,10 +1155,10 @@ document.getElementById('import-file-input').addEventListener('change', (e) => {
                 const select = document.getElementById('saved-jobs-select');
                 select.dispatchEvent(new Event('change'));
 
-                alert(`Successfully imported job: ${importedBlueprint.jobName}`);
+                showToast(`Successfully imported job: ${importedBlueprint.jobName}`, "success");
             });
         } catch (err) {
-            alert(`Failed to import blueprint: ${err.message}`);
+            showToast(`Failed to import blueprint: ${err.message}`, "error");
         }
 
         // Reset the file input so the same file can be imported again if needed
@@ -1263,7 +1357,7 @@ document.getElementById('btn-export-csv').addEventListener('click', () => {
     chrome.storage.local.get(['scrapedData'], (result) => {
         const data = result.scrapedData;
         if (!data || data.length === 0) {
-            alert("No data to export!");
+            showToast("No data to export!", "info");
             return;
         }
 
@@ -1313,7 +1407,7 @@ document.getElementById('btn-export-excel').addEventListener('click', () => {
     chrome.storage.local.get(['scrapedData'], (result) => {
         const data = result.scrapedData;
         if (!data || data.length === 0) {
-            alert("No data to export!");
+            showToast("No data to export!", "info");
             return;
         }
 
@@ -1324,7 +1418,7 @@ document.getElementById('btn-export-excel').addEventListener('click', () => {
             XLSX.writeFile(workbook, 'AI_Digger_Export.xlsx');
         } catch (error) {
             console.error("Excel Export Error:", error);
-            alert("Failed to export to Excel. Please ensure the data format is correct.");
+            showToast("Failed to export to Excel. Please ensure the data format is correct.", "error");
         }
     });
 });
