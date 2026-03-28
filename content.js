@@ -281,8 +281,8 @@ function handleClick(e) {
     e.preventDefault();
     e.stopPropagation();
 
-    // Require Ctrl+Click to finalize selection
-    if (!e.ctrlKey) return;
+    // Require Ctrl+Click (or Cmd+Click on Mac) to finalize selection
+    if (!e.ctrlKey && !e.metaKey) return;
     
     // Generate resilient selectors
     const selectors = generateResilientSelectors(hoveredElement);
@@ -429,8 +429,8 @@ function handleAutoDetectClick(e) {
     e.preventDefault();
     e.stopPropagation();
 
-    // Require Ctrl+Click to finalize selection
-    if (!e.ctrlKey) return;
+    // Require Ctrl+Click (or Cmd+Click on Mac) to finalize selection
+    if (!e.ctrlKey && !e.metaKey) return;
 
     // Highlight
     overlayBox.style.backgroundColor = 'rgba(34, 197, 94, 0.4)';
@@ -549,7 +549,7 @@ function createAutoDetectUIPanel() {
     ui.style.boxShadow = '0 10px 25px rgba(0,0,0,0.2)';
     ui.innerHTML = `
         <div style="font-weight: bold; margin-bottom: 4px;">✨ Auto-Detect Mode</div>
-        <div style="font-size: 12px; margin-bottom: 8px;"><b>Ctrl + Click</b> on a repeating item (like a product card or list row) to auto-generate selectors.</div>
+        <div style="font-size: 12px; margin-bottom: 8px;"><b>Ctrl + Click</b> (or Cmd + Click) on a repeating item (like a product card or list row) to auto-generate selectors.</div>
         <div style="font-size: 11px; margin-bottom: 12px; opacity: 0.8;">Press Esc to cancel</div>
         <button id="ai-digger-cancel-auto" style="background: white; color: #8b5cf6; border: none; padding: 6px 12px; border-radius: 4px; cursor: pointer; font-weight: bold; font-size: 12px;">Cancel</button>
     `;
