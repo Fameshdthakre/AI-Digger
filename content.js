@@ -773,9 +773,12 @@ function executeExtraction(blueprint) {
         }
 
         if (containers.length > 0) {
-            containers.forEach(container => {
-                result['items'].push(processRow(container));
-            });
+            for (let i = 0; i < containers.length; i++) {
+                if (blueprint.maxItems > 0 && result['items'].length >= blueprint.maxItems) {
+                    break;
+                }
+                result['items'].push(processRow(containers[i]));
+            }
         } else {
             // If container fails, still process Document as fallback but flag it
             result['items'].push(processRow(document));
@@ -784,6 +787,14 @@ function executeExtraction(blueprint) {
     } else {
         // STANDARD MODEL (Single Page / Flat mapping)
         result = processRow(document);
+
+        if (blueprint.maxItems > 0) {
+            for (let key in result) {
+                if (Array.isArray(result[key]) && result[key].length > blueprint.maxItems) {
+                    result[key] = result[key].slice(0, blueprint.maxItems);
+                }
+            }
+        }
     }
 
     // Attach Meta Data
