@@ -1308,6 +1308,27 @@ document.getElementById('btn-export-csv').addEventListener('click', () => {
     });
 });
 
+// Export Excel logic
+document.getElementById('btn-export-excel').addEventListener('click', () => {
+    chrome.storage.local.get(['scrapedData'], (result) => {
+        const data = result.scrapedData;
+        if (!data || data.length === 0) {
+            alert("No data to export!");
+            return;
+        }
+
+        try {
+            const worksheet = XLSX.utils.json_to_sheet(data);
+            const workbook = XLSX.utils.book_new();
+            XLSX.utils.book_append_sheet(workbook, worksheet, "Scraped Data");
+            XLSX.writeFile(workbook, 'AI_Digger_Export.xlsx');
+        } catch (error) {
+            console.error("Excel Export Error:", error);
+            alert("Failed to export to Excel. Please ensure the data format is correct.");
+        }
+    });
+});
+
 // 6. Clear Data
 document.getElementById('btn-clear').addEventListener('click', () => {
     if(confirm("Are you sure you want to delete all scraped data?")) {
