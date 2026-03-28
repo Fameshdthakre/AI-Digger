@@ -684,6 +684,16 @@ function generateFlatRows(data, blueprint, url, pageIndex) {
     if (data.items && Array.isArray(data.items)) {
         data.items.forEach(itemRow => {
             const finalRow = { ...itemRow };
+
+            // Auto-Flattening Failsafe for Container Model
+            // Since it's a container model, we expect flat strings per row.
+            // If the user accidentally targeted nested elements and extracted an array, flatten it here.
+            for (const key in finalRow) {
+                if (Array.isArray(finalRow[key])) {
+                    finalRow[key] = finalRow[key].join(', ');
+                }
+            }
+
             finalRow['URL'] = url || data.URL;
             finalRow['Timestamp'] = data.Timestamp || new Date().toISOString();
             finalRow['PageIndex'] = pageIndex || "1";
@@ -725,10 +735,16 @@ function generateFlatRows(data, blueprint, url, pageIndex) {
                 // Unpivot arrays into individual rows up to the rowCount
                 for (let i = 0; i < rowCount; i++) {
                     const row = {};
-                    scalarFields.forEach(key => row[key] = data[key]);
+                    scalarFields.forEach(key => {
+                        // If a scalar field is somehow an array (shouldn't happen but for safety)
+                        row[key] = Array.isArray(data[key]) ? data[key].join(', ') : data[key];
+                    });
                     arrayFields.forEach(key => {
                         // Prevent "undefined" text strings
-                        row[key] = data[key][i] !== undefined ? data[key][i] : "";
+                        let val = data[key][i];
+                        // If the unpivoted value itself is an array (nested array)
+                        if (Array.isArray(val)) val = val.join(', ');
+                        row[key] = val !== undefined ? val : "";
                     });
                     row['URL'] = url || data.URL;
                     row['Timestamp'] = data.Timestamp || new Date().toISOString();
@@ -738,6 +754,14 @@ function generateFlatRows(data, blueprint, url, pageIndex) {
             } else {
                 // No arrays found, it's just a single flat object
                 const finalRow = { ...data };
+
+                // Auto-flatten any accidental arrays in the flat object
+                for (const key in finalRow) {
+                    if (Array.isArray(finalRow[key])) {
+                        finalRow[key] = finalRow[key].join(', ');
+                    }
+                }
+
                 finalRow['URL'] = url || data.URL;
                 finalRow['Timestamp'] = data.Timestamp || new Date().toISOString();
                 finalRow['PageIndex'] = pageIndex || "1";
@@ -1249,7 +1273,9 @@ async function generateBlueprintWithAI(userPrompt, text) {
     }
 
     const systemPrompt = `You are an expert web scraping architect. Generate a complete scraping job blueprint based on the user's natural language request and the provided webpage markdown.
-Ensure the container selector (if applicable) targets the repeating item card (e.g., .product-card).`;
+You MUST choose ONE of two scraping strategies:
+Strategy A (Strict Grid): If the items are in a clear repeating container (like a product card or table row), you MUST provide the 'containerSelector', set 'outputFormat' to 'flat', and set 'multiple: false' for all individual fields inside that container.
+Strategy B (Loose Elements): If there is no clear container, leave 'containerSelector' empty, set 'outputFormat' to 'flat', set 'multiple: true' for all fields to extract parallel arrays, and assign the most important anchoring field (like the Title) as the 'primaryKeyField'.`;
 
     const truncatedText = text.substring(0, 20000);
     const prompt = `${systemPrompt}\n\nUser Request:\n"${userPrompt}"\n\nWebpage Markdown:\n"""\n${truncatedText}\n"""`;
