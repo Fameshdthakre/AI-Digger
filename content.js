@@ -25,7 +25,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     } 
     else if (message.action === 'EXTRACT_DATA') {
         const data = executeExtraction(message.blueprint);
-        chrome.runtime.sendMessage({ action: 'SAVE_PAGE_DATA', data: [data] });
+        // Do not double-send data directly. Background script handles the return value of EXTRACT_DATA.
         sendResponse(data);
     }
     else if (message.action === 'SCROLL_BOTTOM') {

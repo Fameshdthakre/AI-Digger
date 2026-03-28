@@ -98,7 +98,8 @@
                         <option value="">-- Create a new job --</option>
                     </select>
                     <button id="btn-save-job" class="btn btn-primary" style="width: auto; padding: 6px 10px; font-size: 12px; margin-left: 8px;">Save Current</button>
-                    <button id="btn-delete-job" class="btn btn-danger" style="width: auto; padding: 6px 10px; font-size: 12px; margin-left: 8px;">Delete</button>
+                    <button id="btn-clone-job" class="btn btn-outline" style="width: auto; padding: 6px 10px; font-size: 12px; margin-left: 8px; border-color: #3b82f6; color: #3b82f6;">Clone</button>
+                    <button id="btn-delete-job" class="btn btn-danger" style="width: auto; padding: 6px 10px; font-size: 12px; margin-left: 4px;">Delete</button>
                     <button id="btn-export-job" class="btn btn-outline" style="width: auto; padding: 6px 10px; font-size: 12px; margin-left: 4px;">Export</button>
                     <button id="btn-import-job" class="btn btn-outline" style="width: auto; padding: 6px 10px; font-size: 12px; margin-left: 4px;">Import</button>
                 </div>
@@ -109,6 +110,18 @@
                 <div class="form-group">
                     <label>Job Name</label>
                     <input type="text" id="job-name" value="My Scraper Job" />
+                </div>
+                <div class="flex mt-2 mb-4">
+                    <div class="flex-1">
+                        <label>Deep Crawl (Optional Detail Job)</label>
+                        <select id="linked-detail-job">
+                            <option value="">-- None --</option>
+                        </select>
+                    </div>
+                    <div class="flex-1" id="max-detail-pages-group">
+                        <label>Max Detail Pages</label>
+                        <input type="number" id="max-detail-pages" value="10" min="1" />
+                    </div>
                 </div>
                 <div class="flex mt-2 mb-4">
                     <div class="flex-1">
@@ -194,6 +207,44 @@
                     <div style="margin-left: auto; width: 120px;" id="scrolls-container" style="display: none;">
                         <label>Max Scrolls</label>
                         <input type="number" id="max-scrolls" value="5" min="1" />
+                    </div>
+                </div>
+            </div>
+
+            <div class="card">
+                <label style="color: var(--primary);">Automation & Scheduling (Local Cron)</label>
+                <div style="font-size: 11px; color: var(--text-muted); margin-bottom: 8px;">Run this job autonomously in the background. Requires the browser to be open.</div>
+
+                <div class="flex mt-2" style="align-items: center;">
+                    <label class="checkbox-label" style="font-size: 12px; font-weight: 600; color: var(--text-main);">
+                        <input type="checkbox" id="enable-schedule" /> Enable Scheduled Run
+                    </label>
+                    <div style="margin-left: auto; width: 140px;" id="schedule-interval-group" style="display: none;">
+                        <select id="schedule-interval">
+                            <option value="60">Every 1 Hour</option>
+                            <option value="360">Every 6 Hours</option>
+                            <option value="720">Every 12 Hours</option>
+                            <option value="1440">Daily (24h)</option>
+                        </select>
+                    </div>
+                </div>
+
+                <div id="schedule-target-group" style="display: none; margin-top: 12px; padding-top: 12px; border-top: 1px dashed var(--border);">
+                    <div class="form-group">
+                        <label>Target Execution Mode</label>
+                        <select id="schedule-target-mode">
+                            <option value="active-tab">Run on Currently Active Tab (Manual Start)</option>
+                            <option value="start-url">Start at Specific URL (Autopilot)</option>
+                            <option value="multiple-urls">Start with Multiple URLs (Autopilot)</option>
+                        </select>
+                    </div>
+                    <div class="form-group" id="schedule-start-url-group" style="display: none;">
+                        <label>Start URL</label>
+                        <input type="url" id="schedule-start-url" placeholder="https://example.com/start" />
+                    </div>
+                    <div class="form-group" id="schedule-multiple-urls-group" style="display: none;">
+                        <label>Multiple URLs (One per line)</label>
+                        <textarea id="schedule-multiple-urls" placeholder="https://example.com/page1&#10;https://example.com/page2"></textarea>
                     </div>
                 </div>
             </div>
