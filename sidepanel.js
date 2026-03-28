@@ -959,9 +959,45 @@ document.getElementById('saved-jobs-select').addEventListener('change', (e) => {
         // Reset to default new state
         document.getElementById('job-name').value = "My Scraper Job";
         document.getElementById('url-list').value = "";
+        document.getElementById('webhook-url').value = '';
+        document.getElementById('item-container-selector').value = '';
+
+        document.getElementById('scrape-mode').value = 'single-page';
+        document.getElementById('scrape-mode').dispatchEvent(new Event('change'));
+        document.getElementById('output-format').value = 'flat';
+
+        document.getElementById('linked-detail-job').value = '';
+        document.getElementById('max-detail-pages').value = 10;
+
+        // Reset Pagination
+        document.getElementById('next-button-selector').value = '';
+        document.getElementById('max-pages').value = 1;
+        document.getElementById('enable-infinite-scroll').checked = false;
+        document.getElementById('enable-infinite-scroll').dispatchEvent(new Event('change'));
+        document.getElementById('max-scrolls').value = 5;
+
+        // Reset Automation
+        document.getElementById('enable-schedule').checked = false;
+        document.getElementById('enable-schedule').dispatchEvent(new Event('change'));
+        document.getElementById('schedule-interval').value = 60;
+        document.getElementById('schedule-target-mode').value = 'active-tab';
+        document.getElementById('schedule-target-mode').dispatchEvent(new Event('change'));
+        document.getElementById('schedule-start-url').value = '';
+        document.getElementById('schedule-multiple-urls').value = '';
+
+        // Reset Anti-Bot
+        document.getElementById('enable-stealth-mode').checked = false;
+        document.getElementById('min-delay').value = 2000;
+        document.getElementById('max-delay').value = 5000;
+        document.getElementById('batch-size').value = 10;
+        document.getElementById('batch-pause').value = 10000;
+
         actionsContainer.innerHTML = '';
         actionCount = 0;
         loadDefaultFields();
+
+        // Crucial: Update UI Safeguards to re-show PK buttons based on empty container
+        updateUISafeguards();
         return;
     }
 
