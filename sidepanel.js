@@ -143,6 +143,12 @@ function updateUISafeguards() {
         outputFormatSelect.parentElement.style.display = hasContainer ? 'none' : 'block';
     }
 
+    // Toggle Max Items group
+    const maxItemsGroup = document.getElementById('max-items-group');
+    if (maxItemsGroup) {
+        maxItemsGroup.style.display = hasContainer ? 'flex' : 'none';
+    }
+
     // Toggle Field Level settings
     const pkRadios = document.querySelectorAll('.f-primary-key');
     const multipleCheckboxes = document.querySelectorAll('.f-multiple');
@@ -755,6 +761,7 @@ const DEFAULT_RECIPES = {
         urls: "",
         webhookUrl: "",
         containerSelector: "div[data-component-type='s-search-result']",
+        maxItems: 0,
         singlePageOptions: {
             nextButtonSelector: "a.s-pagination-next",
             maxPages: 3,
@@ -781,6 +788,7 @@ const DEFAULT_RECIPES = {
         urls: "",
         webhookUrl: "",
         containerSelector: ".org-top-card-summary-info-list",
+        maxItems: 0,
         singlePageOptions: { maxPages: 1, infiniteScroll: false, maxScrolls: 5, nextButtonSelector: "" },
         schedule: { enabled: false, interval: 60, targetMode: "active-tab", startUrl: "", multipleUrls: "" },
         fields: [
@@ -802,6 +810,7 @@ const DEFAULT_RECIPES = {
         urls: "",
         webhookUrl: "",
         containerSelector: "article",
+        maxItems: 0,
         singlePageOptions: {
             nextButtonSelector: "a.next, .pagination-next",
             maxPages: 5,
@@ -898,6 +907,7 @@ function getBlueprintFromUI() {
         urls: document.getElementById('url-list').value,
         webhookUrl: document.getElementById('webhook-url').value,
         containerSelector: containerSel,
+        maxItems: parseInt(document.getElementById('max-items').value) || 0,
         schedule: {
             enabled: document.getElementById('enable-schedule').checked,
             interval: parseInt(document.getElementById('schedule-interval').value) || 60,
@@ -994,6 +1004,7 @@ document.getElementById('saved-jobs-select').addEventListener('change', (e) => {
 
         document.getElementById('linked-detail-job').value = '';
         document.getElementById('max-detail-pages').value = 10;
+        document.getElementById('max-items').value = 0;
 
         // Reset Pagination
         document.getElementById('next-button-selector').value = '';
@@ -1043,6 +1054,7 @@ document.getElementById('saved-jobs-select').addEventListener('change', (e) => {
     document.getElementById('url-list').value = blueprint.urls || '';
     document.getElementById('webhook-url').value = blueprint.webhookUrl || '';
     document.getElementById('item-container-selector').value = blueprint.containerSelector || '';
+    document.getElementById('max-items').value = blueprint.maxItems || 0;
 
     // Trigger safeguard update after value set
     updateUISafeguards();

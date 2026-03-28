@@ -264,6 +264,11 @@
                     <button class="test-btn" id="test-container-btn" title="Test Container" style="flex-shrink: 0;">🧪</button>
                     <input type="text" id="item-container-selector" placeholder="CSS or XPath for repeating Item Container (e.g. .product-card)" style="margin-bottom: 0; flex: 1;" />
                 </div>
+                <div class="flex mt-2" id="max-items-group" style="display: none; align-items: center;">
+                    <label style="margin: 0; margin-right: 8px;">Max Items/Rows to Extract (per page):</label>
+                    <input type="number" id="max-items" value="0" style="width: 80px;" title="0 means extract all" />
+                    <span style="font-size: 11px; color: var(--text-muted); margin-left: 8px;">(Set to 0 to extract all)</span>
+                </div>
                 <div class="preview-box" id="container-preview-box" style="margin-top: 8px;"></div>
             </div>
 
