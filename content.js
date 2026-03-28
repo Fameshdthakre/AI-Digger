@@ -223,6 +223,14 @@ function handleMacroChange(e) {
 // PHASE 1: VISUAL INSPECTOR LOGIC
 // ==========================================
 
+function handleInspectorKeyDown(e) {
+    if (e.key === 'Escape') {
+        stopInspector();
+        // Send empty response to unblock if needed
+        chrome.runtime.sendMessage({ action: 'INSPECTOR_RESULT', fieldId: currentInspectFieldId, selector: '' });
+    }
+}
+
 function startInspector() {
     // If already active, just clean up old overlay
     if (overlayBox) overlayBox.remove();
@@ -242,6 +250,7 @@ function startInspector() {
 
     document.addEventListener('mouseover', handleMouseOver, true);
     document.addEventListener('click', handleClick, true);
+    document.addEventListener('keydown', handleInspectorKeyDown, true);
 }
 
 function stopInspector() {
@@ -250,6 +259,7 @@ function stopInspector() {
     if (overlayBox) overlayBox.remove();
     document.removeEventListener('mouseover', handleMouseOver, true);
     document.removeEventListener('click', handleClick, true);
+    document.removeEventListener('keydown', handleInspectorKeyDown, true);
     currentInspectFieldId = null;
 }
 
@@ -266,8 +276,13 @@ function handleMouseOver(e) {
 
 function handleClick(e) {
     if (!inspectorActive) return;
+
+    // Always block normal click behavior while inspecting
     e.preventDefault();
     e.stopPropagation();
+
+    // Require Ctrl+Click (or Cmd+Click on Mac) to finalize selection
+    if (!e.ctrlKey && !e.metaKey) return;
     
     // Generate resilient selectors
     const selectors = generateResilientSelectors(hoveredElement);
@@ -348,6 +363,13 @@ function generateCssSelector(el) {
 
 let autoDetectActive = false;
 
+function handleAutoDetectKeyDown(e) {
+    if (e.key === 'Escape') {
+        stopAutoDetect();
+        chrome.runtime.sendMessage({ action: 'AUTO_DETECT_RESULT', status: 'stopped' });
+    }
+}
+
 function startAutoDetect() {
     if (overlayBox) overlayBox.remove();
 
@@ -365,6 +387,7 @@ function startAutoDetect() {
 
     document.addEventListener('mouseover', handleAutoDetectMouseOver, true);
     document.addEventListener('click', handleAutoDetectClick, true);
+    document.addEventListener('keydown', handleAutoDetectKeyDown, true);
 
     // Create UI helper prompt
     createAutoDetectUIPanel();
@@ -378,6 +401,7 @@ function stopAutoDetect() {
     if (ui) ui.remove();
     document.removeEventListener('mouseover', handleAutoDetectMouseOver, true);
     document.removeEventListener('click', handleAutoDetectClick, true);
+    document.removeEventListener('keydown', handleAutoDetectKeyDown, true);
 }
 
 function handleAutoDetectMouseOver(e) {
@@ -397,11 +421,16 @@ function handleAutoDetectMouseOver(e) {
 
 function handleAutoDetectClick(e) {
     if (!autoDetectActive) return;
+
     const ui = document.getElementById('ai-digger-auto-ui');
     if (ui && ui.contains(e.target)) return;
 
+    // Always block normal click behavior while inspecting
     e.preventDefault();
     e.stopPropagation();
+
+    // Require Ctrl+Click (or Cmd+Click on Mac) to finalize selection
+    if (!e.ctrlKey && !e.metaKey) return;
 
     // Highlight
     overlayBox.style.backgroundColor = 'rgba(34, 197, 94, 0.4)';
@@ -520,7 +549,8 @@ function createAutoDetectUIPanel() {
     ui.style.boxShadow = '0 10px 25px rgba(0,0,0,0.2)';
     ui.innerHTML = `
         <div style="font-weight: bold; margin-bottom: 4px;">✨ Auto-Detect Mode</div>
-        <div style="font-size: 12px; margin-bottom: 8px;">Click on a repeating item (like a product card or list row) to auto-generate selectors.</div>
+        <div style="font-size: 12px; margin-bottom: 8px;"><b>Ctrl + Click</b> (or Cmd + Click) on a repeating item (like a product card or list row) to auto-generate selectors.</div>
+        <div style="font-size: 11px; margin-bottom: 12px; opacity: 0.8;">Press Esc to cancel</div>
         <button id="ai-digger-cancel-auto" style="background: white; color: #8b5cf6; border: none; padding: 6px 12px; border-radius: 4px; cursor: pointer; font-weight: bold; font-size: 12px;">Cancel</button>
     `;
     document.body.appendChild(ui);

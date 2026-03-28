@@ -36,7 +36,12 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         addLog("Job stopped by user.");
         sendResponse({ status: 'stopped' });
     } else if (message.action === 'GET_STATUS') {
-        sendResponse({ isRunning, scrapedCount: scrapedData.length, currentJob, jobProgress, jobLogs });
+        chrome.storage.local.get(['jobState'], (res) => {
+            const state = res.jobState;
+            const isDeepCrawling = state ? state.isDeepCrawling : false;
+            sendResponse({ isRunning, isDeepCrawling, scrapedCount: scrapedData.length, currentJob, jobProgress, jobLogs });
+        });
+        return true; // Keep message channel open for async response
     } else if (message.action === 'SAVE_PAGE_DATA') {
         // Content script sends extracted data here
         if (message.data && message.data.length > 0) {
@@ -270,16 +275,12 @@ async function processNextStep() {
             if (detailData) {
                 // If detail returns multiple items (e.g., list of reviews), we create a row for each
                 // If it's just a single flat object, we merge it once
-                let mergedRows = [];
+                let rawDetailRows = [];
 
                 if (detailData.items && Array.isArray(detailData.items)) {
-                    detailData.items.forEach(item => {
-                        mergedRows.push({ ...queueItem.parentRow, ...item });
-                    });
+                    rawDetailRows = detailData.items;
                 } else if (state.detailBlueprint.outputFormat === 'grouped') {
-                     // Legacy flat output arrays handling is omitted for simplicity in detail pages.
-                     // We assume detail jobs are generally extracting a single record or using AI/Container.
-                     mergedRows.push({ ...queueItem.parentRow, ...detailData });
+                     rawDetailRows.push(detailData);
                 } else {
                     // Extract first values from parallel arrays if legacy flat mode used in detail
                     const flatDetail = {};
@@ -290,10 +291,23 @@ async function processNextStep() {
                             flatDetail[key] = val;
                         }
                     }
-                    mergedRows.push({ ...queueItem.parentRow, ...flatDetail });
+                    rawDetailRows.push(flatDetail);
                 }
 
-                // Final Save
+                // Final Save with Collision Prevention
+                let mergedRows = [];
+                rawDetailRows.forEach(detailRow => {
+                    const mergedRow = { ...queueItem.parentRow };
+                    for (const key in detailRow) {
+                        if (mergedRow.hasOwnProperty(key)) {
+                            mergedRow[`Detail_${key}`] = detailRow[key];
+                        } else {
+                            mergedRow[key] = detailRow[key];
+                        }
+                    }
+                    mergedRows.push(mergedRow);
+                });
+
                 mergedRows.forEach(row => {
                     // Ensure fixed columns are maintained
                     const finalRow = { Timestamp: queueItem.parentRow.Timestamp, URL: detailUrl, PageIndex: queueItem.parentRow.PageIndex, ...row };
@@ -652,16 +666,21 @@ function enqueueForDeepCrawl(data, state, url, pageIndex) {
         if (urlField) urlFieldName = urlField.name;
     }
 
-    if (!urlFieldName) {
-        addLog("WARNING: No Detail URL Field identified. Saving parent rows directly.");
-        saveExtractedData(data, url, pageIndex);
-        return;
-    }
-
     let rowsGenerated = generateFlatRows(data, blueprint, url, pageIndex);
 
     rowsGenerated.forEach(row => {
-        let detailUrl = row[urlFieldName];
+        let detailUrl = null;
+
+        // Try explicit field
+        if (urlFieldName && row[urlFieldName]) {
+            detailUrl = row[urlFieldName];
+        }
+
+        // Fallback: Find the first valid HTTP URL in the row
+        if (!detailUrl || typeof detailUrl !== 'string' || !detailUrl.startsWith('http')) {
+            detailUrl = Object.values(row).find(val => typeof val === 'string' && val.startsWith('http'));
+        }
+
         if (detailUrl && typeof detailUrl === 'string' && detailUrl.startsWith('http')) {
             // Check max detail pages limit
             if (state.deepCrawlQueue.length < blueprint.maxDetailPages) {

@@ -1320,15 +1320,25 @@ function updateStatus() {
         const logsBox = document.getElementById('job-logs');
 
         if (response.isRunning) {
-            document.getElementById('status-indicator').innerText = "Scraping in progress...";
-            document.getElementById('status-indicator').style.color = "#22c55e";
+            if (response.isDeepCrawling) {
+                document.getElementById('status-indicator').innerText = "Deep Crawling Inner Pages...";
+                document.getElementById('status-indicator').style.color = "#a855f7"; // Purple
+            } else {
+                document.getElementById('status-indicator').innerText = "Scraping in progress...";
+                document.getElementById('status-indicator').style.color = "#22c55e"; // Green
+            }
             document.getElementById('btn-stop').style.display = 'block';
 
             if (response.jobProgress && response.jobProgress.total > 0) {
                 progContainer.style.display = 'block';
                 progBar.max = response.jobProgress.total;
                 progBar.value = response.jobProgress.current;
-                progText.innerText = `${response.jobProgress.current} / ${response.jobProgress.total}`;
+
+                if (response.isDeepCrawling) {
+                    progText.innerText = `Deep Crawl: ${response.jobProgress.current} / ${response.jobProgress.total}`;
+                } else {
+                    progText.innerText = `${response.jobProgress.current} / ${response.jobProgress.total}`;
+                }
             }
 
             if (response.jobLogs && response.jobLogs.length > 0) {
