@@ -879,17 +879,25 @@ function getBlueprintFromUI() {
         }
     });
 
+    let outFormat = document.getElementById('output-format').value;
+    let containerSel = document.getElementById('item-container-selector').value;
+
+    // If using a container, or if no primary key is strictly needed but fields are arrays, force flat.
+    if (containerSel && containerSel.trim() !== '') {
+        outFormat = 'flat';
+    }
+
     return {
         jobName: document.getElementById('job-name').value,
         scrapingType: document.getElementById('scrape-mode').value,
-        outputFormat: document.getElementById('output-format').value,
+        outputFormat: outFormat,
         primaryKeyField: primaryKeyField,
         detailUrlField: detailUrlField,
         linkedDetailJob: document.getElementById('linked-detail-job').value,
         maxDetailPages: parseInt(document.getElementById('max-detail-pages').value),
         urls: document.getElementById('url-list').value,
         webhookUrl: document.getElementById('webhook-url').value,
-        containerSelector: document.getElementById('item-container-selector').value,
+        containerSelector: containerSel,
         schedule: {
             enabled: document.getElementById('enable-schedule').checked,
             interval: parseInt(document.getElementById('schedule-interval').value) || 60,
@@ -1479,7 +1487,17 @@ document.getElementById('btn-export-excel').addEventListener('click', () => {
             const worksheet = XLSX.utils.json_to_sheet(data);
             const workbook = XLSX.utils.book_new();
             XLSX.utils.book_append_sheet(workbook, worksheet, "Scraped Data");
-            XLSX.writeFile(workbook, 'AI_Digger_Export.xlsx');
+
+            // Generate raw memory buffer instead of relying on DOM writeFile
+            const excelBuffer = XLSX.write(workbook, { bookType: 'xlsx', type: 'array' });
+            const blob = new Blob([excelBuffer], { type: 'application/octet-stream' });
+            const url = URL.createObjectURL(blob);
+
+            chrome.downloads.download({
+                url: url,
+                filename: 'AI_Digger_Export.xlsx',
+                saveAs: true
+            });
         } catch (error) {
             console.error("Excel Export Error:", error);
             showToast("Failed to export to Excel. Please ensure the data format is correct.", "error");
