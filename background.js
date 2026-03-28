@@ -699,17 +699,14 @@ function enqueueForDeepCrawl(data, state, url, pageIndex) {
 function generateFlatRows(data, blueprint, url, pageIndex) {
     let rowsGenerated = [];
 
-    // Helper function to unpivot a single row object that contains parallel arrays
     const unpivotRow = (rowObj) => {
         let maxLen = 0;
         const arrayKeys = [];
         const scalarKeys = [];
 
-        // Separate scalar string values from array lists
+        // Separate scalar values from array lists
         for (const [key, val] of Object.entries(rowObj)) {
-            // Ignore internal metadata keys
             if (key === 'URL' || key === 'Timestamp' || key === '_failedFields' || key === '_pageMarkdown') continue;
-
             if (Array.isArray(val)) {
                 arrayKeys.push(key);
                 if (val.length > maxLen) maxLen = val.length;
@@ -718,51 +715,43 @@ function generateFlatRows(data, blueprint, url, pageIndex) {
             }
         }
 
-        // If no arrays are found, just return the single flat row
-        if (maxLen === 0) {
-            return [{ ...rowObj }];
-        }
+        if (maxLen === 0) return [{ ...rowObj }];
 
-        // Unpivot arrays into multiple distinct rows
         const unpivoted = [];
         for (let i = 0; i < maxLen; i++) {
             const newRow = {};
-            // Copy scalar values (like Page Title) to every new row
             scalarKeys.forEach(key => { newRow[key] = rowObj[key]; });
 
-            // Extract the matching i-th element of the arrays
             arrayKeys.forEach(key => {
                 let val = rowObj[key][i];
-                // Failsafe: If the unpivoted value itself is somehow a nested array, flatten it to a string
-                if (Array.isArray(val)) val = val.join(', ');
-                newRow[key] = val !== undefined ? val : "";
+                // Smart Object Flattening: If the array contains objects, merge their keys into columns
+                if (val !== null && typeof val === 'object' && !Array.isArray(val)) {
+                    for (const subKey in val) {
+                        newRow[subKey] = val[subKey] !== undefined ? val[subKey] : "";
+                    }
+                } else {
+                    if (Array.isArray(val)) val = val.join(', ');
+                    newRow[key] = val !== undefined ? val : "";
+                }
             });
             unpivoted.push(newRow);
         }
         return unpivoted;
     };
 
-    // Helper to attach metadata to final rows
     const attachMetadata = (rows) => {
         rows.forEach(r => {
-            r['URL'] = url || data.URL || window.location.href;
+            r['URL'] = url || data.URL || "No URL";
             r['Timestamp'] = data.Timestamp || new Date().toISOString();
             r['PageIndex'] = pageIndex || "1";
             rowsGenerated.push(r);
         });
     };
 
-    // Apply unpivot logic based on extraction model
     if (data.items && Array.isArray(data.items)) {
-        // Container Model: Process each container item
-        data.items.forEach(item => {
-            const unpivotedItems = unpivotRow(item);
-            attachMetadata(unpivotedItems);
-        });
+        data.items.forEach(item => { attachMetadata(unpivotRow(item)); });
     } else {
-        // Flat Global Model: Process the entire document object
-        const unpivotedItems = unpivotRow(data);
-        attachMetadata(unpivotedItems);
+        attachMetadata(unpivotRow(data));
     }
 
     return rowsGenerated;
