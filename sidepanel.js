@@ -44,6 +44,48 @@ scheduleTargetMode.addEventListener('change', (e) => {
     scheduleMultipleUrlsGroup.style.display = e.target.value === 'multiple-urls' ? 'block' : 'none';
 });
 
+// Container input safeguard logic
+const containerInput = document.getElementById('item-container-selector');
+const outputFormatSelect = document.getElementById('output-format');
+
+function updateUISafeguards() {
+    const hasContainer = containerInput.value.trim() !== '';
+
+    // Toggle Output Format visibility
+    if (outputFormatSelect.parentElement) {
+        outputFormatSelect.parentElement.style.display = hasContainer ? 'none' : 'block';
+    }
+
+    // Toggle Field Level settings
+    const pkRadios = document.querySelectorAll('.f-primary-key');
+    const multipleCheckboxes = document.querySelectorAll('.f-multiple');
+
+    pkRadios.forEach(radio => {
+        const label = radio.parentElement;
+        if (label) {
+            label.style.display = hasContainer ? 'none' : 'flex';
+        }
+    });
+
+    multipleCheckboxes.forEach(cb => {
+        const label = cb.parentElement;
+        if (label) {
+            if (hasContainer) {
+                cb.checked = false;
+                cb.disabled = true;
+                label.style.opacity = '0.5';
+                label.title = 'Disabled when using Container Model';
+            } else {
+                cb.disabled = false;
+                label.style.opacity = '1';
+                label.title = 'Extract an Array of multiple items';
+            }
+        }
+    });
+}
+
+containerInput.addEventListener('input', updateUISafeguards);
+
 // Test Container Button
 document.getElementById('test-container-btn').addEventListener('click', async () => {
     const selectorInput = document.getElementById('item-container-selector');
@@ -306,6 +348,7 @@ function addFieldRow(name = '', selector = '', type = 'css', extractType = 'text
     });
 
     fieldsContainer.appendChild(div);
+    updateUISafeguards(); // Apply dynamic safeguards to the new field
 }
 
 // === Pre-Extraction Actions Logic ===
@@ -848,6 +891,9 @@ document.getElementById('saved-jobs-select').addEventListener('change', (e) => {
     document.getElementById('webhook-url').value = blueprint.webhookUrl || '';
     document.getElementById('item-container-selector').value = blueprint.containerSelector || '';
 
+    // Trigger safeguard update after value set
+    updateUISafeguards();
+
     // Set Anti-Bot
     if (blueprint.antiBot) {
         document.getElementById('enable-stealth-mode').checked = blueprint.antiBot.stealthMode || false;
@@ -1097,7 +1143,10 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
 
         if (fieldId === 'item-container-selector') {
             const selectorInput = document.getElementById('item-container-selector');
-            if (selectorInput) selectorInput.value = selector;
+            if (selectorInput) {
+                selectorInput.value = selector;
+                selectorInput.dispatchEvent(new Event('input')); // Trigger safeguard logic
+            }
 
             const inspectBtn = document.getElementById('inspect-container-btn');
             if (inspectBtn) {
