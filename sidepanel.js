@@ -1436,6 +1436,41 @@ function updateStatus() {
     });
 }
 
+// Export Helpers
+function getExportFilename(extension) {
+    const now = new Date();
+    const yyyy = now.getFullYear();
+    const mm = String(now.getMonth() + 1).padStart(2, '0');
+    const dd = String(now.getDate()).padStart(2, '0');
+    const hh = String(now.getHours()).padStart(2, '0');
+    const min = String(now.getMinutes()).padStart(2, '0');
+
+    // Try to get current job name, fallback to 'Universal_Scraper'
+    let jobName = document.getElementById('job-name')?.value || 'AI_Digger';
+    // Clean job name of invalid filename characters
+    jobName = jobName.replace(/[^a-z0-9]/gi, '_');
+
+    return `${jobName}_${yyyy}-${mm}-${dd}_${hh}-${min}.${extension}`;
+}
+
+function sanitizeDataForExport(data) {
+    return data.map(row => {
+        const cleanRow = {};
+        for (let key in row) {
+            let val = row[key];
+            if (val === null || val === undefined) {
+                cleanRow[key] = "";
+            } else if (typeof val === 'object') {
+                // Force arrays and nested objects into readable strings
+                cleanRow[key] = JSON.stringify(val);
+            } else {
+                cleanRow[key] = String(val);
+            }
+        }
+        return cleanRow;
+    });
+}
+
 // 5. Export CSV logic (Phase 4)
 document.getElementById('btn-export-csv').addEventListener('click', () => {
     chrome.storage.local.get(['scrapedData'], (result) => {
@@ -1445,24 +1480,23 @@ document.getElementById('btn-export-csv').addEventListener('click', () => {
             return;
         }
 
+        const cleanData = sanitizeDataForExport(data);
+
         // Gather ALL unique headers across all rows in case some rows have missing keys
         const headerSet = new Set();
-        data.forEach(row => Object.keys(row).forEach(k => headerSet.add(k)));
+        cleanData.forEach(row => Object.keys(row).forEach(k => headerSet.add(k)));
         const headers = Array.from(headerSet);
 
         const csvRows = [];
         // Header row
         csvRows.push(headers.map(h => `"${String(h).replace(/"/g, '""')}"`).join(','));
 
-        for (const row of data) {
+        for (const row of cleanData) {
             const values = headers.map(header => {
                 let rawVal = row[header];
 
                 // Prevent literal "undefined" or "null" text
                 if (rawVal === null || rawVal === undefined) rawVal = "";
-
-                // If an array somehow survived (e.g., user scraped nested tags), format it safely
-                if (typeof rawVal === 'object') rawVal = JSON.stringify(rawVal);
 
                 let val = String(rawVal);
                 // Escape quotes and wrap in quotes for CSV safety
@@ -1480,7 +1514,7 @@ document.getElementById('btn-export-csv').addEventListener('click', () => {
         
         chrome.downloads.download({
             url: url,
-            filename: 'Universal_Scraper_Export.csv',
+            filename: getExportFilename('csv'),
             saveAs: true
         });
     });
@@ -1496,18 +1530,19 @@ document.getElementById('btn-export-excel').addEventListener('click', () => {
         }
 
         try {
-            const worksheet = XLSX.utils.json_to_sheet(data);
+            const cleanData = sanitizeDataForExport(data);
+            const worksheet = XLSX.utils.json_to_sheet(cleanData);
             const workbook = XLSX.utils.book_new();
             XLSX.utils.book_append_sheet(workbook, worksheet, "Scraped Data");
 
             // Generate raw memory buffer instead of relying on DOM writeFile
             const excelBuffer = XLSX.write(workbook, { bookType: 'xlsx', type: 'array' });
-            const blob = new Blob([excelBuffer], { type: 'application/octet-stream' });
+            const blob = new Blob([excelBuffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
             const url = URL.createObjectURL(blob);
 
             chrome.downloads.download({
                 url: url,
-                filename: 'AI_Digger_Export.xlsx',
+                filename: getExportFilename('xlsx'),
                 saveAs: true
             });
         } catch (error) {
