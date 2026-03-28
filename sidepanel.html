@@ -9,7 +9,29 @@
         :root {
             --bg: #f9fafb; --surface: #ffffff; --primary: #3b82f6; --primary-hover: #2563eb;
             --text-main: #111827; --text-muted: #6b7280; --border: #e5e7eb; --danger: #ef4444;
+            --field-bg: #f9fafb; --preview-bg: #f3f4f6; --preview-text: #374151;
+            --magic-bg: #fdf4ff; --magic-border: #e879f9; --magic-text: #c026d3;
+            --profile-bg: #eff6ff; --profile-border: #bfdbfe;
+            --footer-bg: rgba(255, 255, 255, 0.85);
         }
+
+        @media (prefers-color-scheme: dark) {
+            :root {
+                --bg: #0f172a; --surface: #1e293b; --primary: #3b82f6; --primary-hover: #60a5fa;
+                --text-main: #f8fafc; --text-muted: #94a3b8; --border: #334155; --danger: #f87171;
+                --field-bg: #0f172a; --preview-bg: #0f172a; --preview-text: #cbd5e1;
+                --magic-bg: #2d1b4e; --magic-border: #86198f; --magic-text: #e879f9;
+                --profile-bg: #1e3a8a; --profile-border: #1d4ed8;
+                --footer-bg: rgba(30, 41, 59, 0.85);
+            }
+            input, select, textarea { background-color: var(--surface); color: var(--text-main); color-scheme: dark; }
+            .btn-outline { color: var(--text-main); border-color: var(--border); }
+            .btn-outline:hover { background-color: var(--border); }
+            .inspect-btn, .test-btn, .remove-field { background-color: var(--surface); color: var(--text-main); border-color: var(--border); }
+            .btn-danger { background-color: #7f1d1d; color: #fca5a5; }
+            .remove-field:hover { background-color: #7f1d1d; border-color: #f87171; color: #fca5a5; }
+        }
+
         body { font-family: system-ui, -apple-system, sans-serif; background: var(--bg); color: var(--text-main); width: 100%; height: 100vh; margin: 0; padding: 0; display: flex; flex-direction: column; }
         header { background: var(--surface); padding: 16px 20px; border-bottom: 1px solid var(--border); display: flex; justify-content: space-between; align-items: center; flex-shrink: 0; }
         h1 { margin: 0; font-size: 18px; font-weight: 700; color: var(--primary); }
@@ -35,7 +57,7 @@
         .btn-outline:hover { background: var(--bg); }
         .btn-danger { background: #fee2e2; color: var(--danger); }
         
-        .field-row { display: flex; flex-direction: column; gap: 8px; margin-bottom: 12px; padding: 12px; background: #f9fafb; border: 1px solid var(--border); border-radius: 6px; }
+        .field-row { display: flex; flex-direction: column; gap: 8px; margin-bottom: 12px; padding: 12px; background: var(--field-bg); border: 1px solid var(--border); border-radius: 6px; }
         .field-row input, .field-row select { margin-bottom: 0; }
         .field-row-top, .field-row-bottom { display: flex; gap: 8px; align-items: center; }
         .remove-field { background: var(--surface); border: 1px solid var(--border); color: var(--danger); cursor: pointer; font-size: 14px; padding: 6px; border-radius: 4px; display: flex; align-items: center; justify-content: center;}
@@ -44,7 +66,7 @@
         .inspect-btn:hover { border-color: var(--primary); color: var(--primary); }
         .test-btn { background: var(--surface); border: 1px solid var(--border); cursor: pointer; padding: 6px 10px; border-radius: 4px; font-size: 14px; display: flex; align-items: center; justify-content: center; }
         .test-btn:hover { border-color: #10b981; color: #10b981; }
-        .preview-box { background: #f3f4f6; border: 1px dashed var(--border); padding: 8px; border-radius: 4px; font-family: monospace; font-size: 11px; color: #374151; max-height: 80px; overflow-y: auto; white-space: pre-wrap; display: none; }
+        .preview-box { background: var(--preview-bg); border: 1px dashed var(--border); padding: 8px; border-radius: 4px; font-family: monospace; font-size: 11px; color: var(--preview-text); max-height: 80px; overflow-y: auto; white-space: pre-wrap; display: none; }
         .checkbox-label { display: flex; align-items: center; gap: 4px; font-size: 11px; font-weight: normal; cursor: pointer; color: var(--text-muted); }
         .checkbox-label input { width: auto; margin: 0; }
         
@@ -65,6 +87,81 @@
         /* Stats */
         .stat-box { text-align: center; padding: 20px; background: var(--surface); border-radius: 8px; border: 1px solid var(--border); }
         .stat-number { font-size: 32px; font-weight: 800; color: var(--primary); }
+
+        /* Accordions */
+        details.card > summary {
+            list-style: none; /* Hide default arrow */
+            cursor: pointer;
+            margin: -16px;
+            padding: 16px;
+            display: flex;
+            align-items: center;
+        }
+        details.card > summary::-webkit-details-marker { display: none; } /* Safari */
+        details.card > summary::before {
+            content: '▶';
+            font-size: 10px;
+            display: inline-block;
+            margin-right: 8px;
+            transition: transform 0.2s ease-in-out;
+            color: var(--text-muted);
+        }
+        details.card[open] > summary {
+            border-bottom: 1px solid var(--border);
+            margin-bottom: 16px;
+        }
+        details.card[open] > summary::before {
+            transform: rotate(90deg);
+        }
+        .summary-title { color: var(--primary); font-size: 12px; font-weight: 600; }
+        .summary-subtitle { font-size: 11px; color: var(--text-muted); margin-left: 8px; font-weight: normal; }
+
+        /* Sticky Action Footer */
+        .sticky-footer {
+            position: sticky;
+            bottom: 0;
+            left: 0;
+            width: 100%;
+            padding: 16px 20px;
+            background: var(--footer-bg);
+            backdrop-filter: blur(8px);
+            border-top: 1px solid var(--border);
+            box-sizing: border-box;
+            display: flex;
+            gap: 12px;
+            z-index: 10;
+        }
+
+        /* Toasts */
+        #toast-container {
+            position: fixed;
+            bottom: 80px;
+            right: 20px;
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+            z-index: 9999;
+            pointer-events: none;
+        }
+        .toast {
+            background: var(--surface);
+            color: var(--text-main);
+            border: 1px solid var(--border);
+            border-left: 4px solid var(--primary);
+            padding: 12px 16px;
+            border-radius: 6px;
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+            font-size: 13px;
+            font-weight: 500;
+            opacity: 0;
+            transform: translateX(100%);
+            transition: opacity 0.3s, transform 0.3s;
+            pointer-events: auto;
+        }
+        .toast.show { opacity: 1; transform: translateX(0); }
+        .toast.success { border-left-color: #10b981; }
+        .toast.error { border-left-color: #ef4444; }
+        .toast.info { border-left-color: #3b82f6; }
     </style>
 </head>
 <body>
@@ -91,17 +188,18 @@
                 <button id="btn-generate-blueprint" class="btn btn-primary" style="background-color: #c026d3; border-color: #c026d3; margin-top: 8px;">Generate Blueprint</button>
             </div>
 
-            <div class="card" style="background: #eff6ff; border-color: #bfdbfe;">
+            <div class="card" style="background: var(--profile-bg); border-color: var(--profile-border);">
                 <label style="color: var(--primary);">Saved Jobs Profile</label>
                 <div class="flex mt-2" style="align-items: center;">
                     <select id="saved-jobs-select" style="flex: 1;">
                         <option value="">-- Create a new job --</option>
                     </select>
-                    <button id="btn-save-job" class="btn btn-primary" style="width: auto; padding: 6px 10px; font-size: 12px; margin-left: 8px;">Save Current</button>
-                    <button id="btn-clone-job" class="btn btn-outline" style="width: auto; padding: 6px 10px; font-size: 12px; margin-left: 8px; border-color: #3b82f6; color: #3b82f6;">Clone</button>
-                    <button id="btn-delete-job" class="btn btn-danger" style="width: auto; padding: 6px 10px; font-size: 12px; margin-left: 4px;">Delete</button>
-                    <button id="btn-export-job" class="btn btn-outline" style="width: auto; padding: 6px 10px; font-size: 12px; margin-left: 4px;">Export</button>
-                    <button id="btn-import-job" class="btn btn-outline" style="width: auto; padding: 6px 10px; font-size: 12px; margin-left: 4px;">Import</button>
+                </div>
+                <div class="flex mt-2" style="justify-content: flex-end; gap: 4px;">
+                    <button id="btn-clone-job" class="btn btn-outline" style="width: auto; padding: 6px 10px; font-size: 12px; border-color: #3b82f6; color: #3b82f6;">Clone</button>
+                    <button id="btn-export-job" class="btn btn-outline" style="width: auto; padding: 6px 10px; font-size: 12px;">Export</button>
+                    <button id="btn-import-job" class="btn btn-outline" style="width: auto; padding: 6px 10px; font-size: 12px;">Import</button>
+                    <button id="btn-delete-job" class="btn btn-danger" style="width: auto; padding: 6px 10px; font-size: 12px;">Delete</button>
                 </div>
             </div>
             <input type="file" id="import-file-input" accept=".json" style="display: none;" />
@@ -145,15 +243,18 @@
                 </div>
             </div>
 
-            <div class="card">
-                <label style="color: var(--primary);">Pre-Extraction Actions (Optional)</label>
+            <details class="card">
+                <summary>
+                    <span class="summary-title">Pre-Extraction Actions (Optional)</span>
+                    <span class="summary-subtitle" id="subtitle-actions">None</span>
+                </summary>
                 <div style="font-size: 11px; color: var(--text-muted); margin-bottom: 8px;">Run clicks or type text before scraping (e.g. close cookie banners).</div>
                 <div id="actions-container"></div>
                 <div style="display: flex; gap: 8px; margin-top: 8px;">
                     <button id="add-action" class="btn btn-outline" style="font-size: 12px; padding: 6px; flex: 1;">+ Add Action</button>
                     <button id="btn-record-macro" class="btn btn-outline" style="font-size: 12px; padding: 6px; flex: 1; border-color: #ef4444; color: #ef4444;">🔴 Record Actions</button>
                 </div>
-            </div>
+            </details>
 
             <div class="card">
                 <label style="color: var(--primary);">Container-Child Scoped Extraction (Optional)</label>
@@ -180,8 +281,11 @@
                 <button id="add-field" class="btn btn-outline mt-2" style="font-size: 12px; padding: 6px;">+ Add Data Field</button>
             </div>
 
-            <div class="card" id="single-page-settings">
-                <label style="color: var(--primary);">Single Page Advanced Logic</label>
+            <details class="card" id="single-page-settings">
+                <summary>
+                    <span class="summary-title">Single Page Advanced Logic</span>
+                    <span class="summary-subtitle" id="subtitle-pagination">No pagination</span>
+                </summary>
 
                 <div class="flex mt-2" style="align-items: flex-end;">
                     <div style="flex: 2;">
@@ -209,10 +313,13 @@
                         <input type="number" id="max-scrolls" value="5" min="1" />
                     </div>
                 </div>
-            </div>
+            </details>
 
-            <div class="card">
-                <label style="color: var(--primary);">Automation & Scheduling (Local Cron)</label>
+            <details class="card">
+                <summary>
+                    <span class="summary-title">Automation & Scheduling (Local Cron)</span>
+                    <span class="summary-subtitle" id="subtitle-schedule">Off</span>
+                </summary>
                 <div style="font-size: 11px; color: var(--text-muted); margin-bottom: 8px;">Run this job autonomously in the background. Requires the browser to be open.</div>
 
                 <div class="flex mt-2" style="align-items: center;">
@@ -247,10 +354,13 @@
                         <textarea id="schedule-multiple-urls" placeholder="https://example.com/page1&#10;https://example.com/page2"></textarea>
                     </div>
                 </div>
-            </div>
+            </details>
 
-            <div class="card">
-                <label>Anti-Bot Settings (Delays)</label>
+            <details class="card" style="margin-bottom: 80px;">
+                <summary>
+                    <span class="summary-title">Anti-Bot Settings (Delays)</span>
+                    <span class="summary-subtitle" id="subtitle-antibot">Stealth Off, 2-5s</span>
+                </summary>
                 <label class="checkbox-label" style="font-size: 12px; font-weight: 600; color: var(--text-main); margin-top: 8px;">
                     <input type="checkbox" id="enable-stealth-mode" /> Enable Human Stealth Emulation (Mouse/Scroll Jitters)
                 </label>
@@ -274,9 +384,7 @@
                         <input type="number" id="batch-pause" value="10000" />
                     </div>
                 </div>
-            </div>
-
-            <button id="btn-start" class="btn btn-primary mb-4">▶ Start Scraping Job</button>
+            </details>
         </div>
 
         <!-- RUN & EXPORT VIEW -->
@@ -383,6 +491,13 @@
         </div>
 
     </div>
+
+    <div class="sticky-footer" id="build-footer">
+        <button id="btn-start" class="btn btn-primary" style="flex: 2;">▶ Start Scraping Job</button>
+        <button id="btn-save-job-footer" class="btn btn-outline" style="flex: 1; background: var(--surface);">Save Job</button>
+    </div>
+
+    <div id="toast-container"></div>
 
     <script src="xlsx.full.min.js"></script>
     <script src="sidepanel.js"></script>
