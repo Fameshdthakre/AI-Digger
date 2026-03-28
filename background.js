@@ -699,95 +699,72 @@ function enqueueForDeepCrawl(data, state, url, pageIndex) {
 function generateFlatRows(data, blueprint, url, pageIndex) {
     let rowsGenerated = [];
 
-    // CASE 1: Container Model or AI Model (returns structured 'items' array)
-    if (data.items && Array.isArray(data.items)) {
-        data.items.forEach(itemRow => {
-            const finalRow = { ...itemRow };
+    // Helper function to unpivot a single row object that contains parallel arrays
+    const unpivotRow = (rowObj) => {
+        let maxLen = 0;
+        const arrayKeys = [];
+        const scalarKeys = [];
 
-            // Auto-Flattening Failsafe for Container Model
-            // Since it's a container model, we expect flat strings per row.
-            // If the user accidentally targeted nested elements and extracted an array, flatten it here.
-            for (const key in finalRow) {
-                if (Array.isArray(finalRow[key])) {
-                    finalRow[key] = finalRow[key].join(', ');
-                }
-            }
+        // Separate scalar string values from array lists
+        for (const [key, val] of Object.entries(rowObj)) {
+            // Ignore internal metadata keys
+            if (key === 'URL' || key === 'Timestamp' || key === '_failedFields' || key === '_pageMarkdown') continue;
 
-            finalRow['URL'] = url || data.URL;
-            finalRow['Timestamp'] = data.Timestamp || new Date().toISOString();
-            finalRow['PageIndex'] = pageIndex || "1";
-            rowsGenerated.push(finalRow);
-        });
-    }
-    // CASE 2: Flat Model / Legacy (Returns an object with parallel arrays)
-    else {
-        // Output Format Grouped
-        if (blueprint?.outputFormat === 'grouped') {
-            const finalRow = { ...data };
-            finalRow['URL'] = url || data.URL;
-            finalRow['Timestamp'] = data.Timestamp || new Date().toISOString();
-            finalRow['PageIndex'] = pageIndex || "1";
-            rowsGenerated.push(finalRow);
-        }
-        // Output Format Flat (Default/Strict Row Column)
-        else {
-            let maxArrayLength = 0;
-            const arrayFields = [];
-            const scalarFields = [];
-
-            for (const [key, value] of Object.entries(data)) {
-                if (Array.isArray(value)) {
-                    arrayFields.push(key);
-                    if (value.length > maxArrayLength) maxArrayLength = value.length;
-                } else {
-                    scalarFields.push(key);
-                }
-            }
-
-            // Determine Primary Key length constraint
-            let rowCount = maxArrayLength;
-            if (blueprint?.primaryKeyField && Array.isArray(data[blueprint.primaryKeyField])) {
-                rowCount = data[blueprint.primaryKeyField].length;
-            }
-
-            if (rowCount > 0) {
-                // Unpivot arrays into individual rows up to the rowCount
-                for (let i = 0; i < rowCount; i++) {
-                    const row = {};
-                    scalarFields.forEach(key => {
-                        // If a scalar field is somehow an array (shouldn't happen but for safety)
-                        row[key] = Array.isArray(data[key]) ? data[key].join(', ') : data[key];
-                    });
-                    arrayFields.forEach(key => {
-                        // Prevent "undefined" text strings
-                        let val = data[key][i];
-                        // If the unpivoted value itself is an array (nested array)
-                        if (Array.isArray(val)) val = val.join(', ');
-                        row[key] = val !== undefined ? val : "";
-                    });
-                    row['URL'] = url || data.URL;
-                    row['Timestamp'] = data.Timestamp || new Date().toISOString();
-                    row['PageIndex'] = pageIndex || "1";
-                    rowsGenerated.push(row);
-                }
+            if (Array.isArray(val)) {
+                arrayKeys.push(key);
+                if (val.length > maxLen) maxLen = val.length;
             } else {
-                // No arrays found, it's just a single flat object
-                const finalRow = { ...data };
-
-                // Auto-flatten any accidental arrays in the flat object
-                for (const key in finalRow) {
-                    if (Array.isArray(finalRow[key])) {
-                        finalRow[key] = finalRow[key].join(', ');
-                    }
-                }
-
-                finalRow['URL'] = url || data.URL;
-                finalRow['Timestamp'] = data.Timestamp || new Date().toISOString();
-                finalRow['PageIndex'] = pageIndex || "1";
-                rowsGenerated.push(finalRow);
+                scalarKeys.push(key);
             }
         }
+
+        // If no arrays are found, just return the single flat row
+        if (maxLen === 0) {
+            return [{ ...rowObj }];
+        }
+
+        // Unpivot arrays into multiple distinct rows
+        const unpivoted = [];
+        for (let i = 0; i < maxLen; i++) {
+            const newRow = {};
+            // Copy scalar values (like Page Title) to every new row
+            scalarKeys.forEach(key => { newRow[key] = rowObj[key]; });
+
+            // Extract the matching i-th element of the arrays
+            arrayKeys.forEach(key => {
+                let val = rowObj[key][i];
+                // Failsafe: If the unpivoted value itself is somehow a nested array, flatten it to a string
+                if (Array.isArray(val)) val = val.join(', ');
+                newRow[key] = val !== undefined ? val : "";
+            });
+            unpivoted.push(newRow);
+        }
+        return unpivoted;
+    };
+
+    // Helper to attach metadata to final rows
+    const attachMetadata = (rows) => {
+        rows.forEach(r => {
+            r['URL'] = url || data.URL || window.location.href;
+            r['Timestamp'] = data.Timestamp || new Date().toISOString();
+            r['PageIndex'] = pageIndex || "1";
+            rowsGenerated.push(r);
+        });
+    };
+
+    // Apply unpivot logic based on extraction model
+    if (data.items && Array.isArray(data.items)) {
+        // Container Model: Process each container item
+        data.items.forEach(item => {
+            const unpivotedItems = unpivotRow(item);
+            attachMetadata(unpivotedItems);
+        });
+    } else {
+        // Flat Global Model: Process the entire document object
+        const unpivotedItems = unpivotRow(data);
+        attachMetadata(unpivotedItems);
     }
+
     return rowsGenerated;
 }
 
