@@ -776,6 +776,8 @@ function saveExtractedData(data, url, pageIndex) {
         triggerWebhook(currentJob?.webhookUrl, row);
     });
 
+    postToWebhook(currentJob.webhookUrl, rowsToSave, currentJob.jobName);
+
     chrome.storage.local.set({ scrapedData: scrapedData });
 }
 
@@ -790,6 +792,19 @@ function triggerWebhook(url, data) {
     }).catch(err => {
         addLog(`Webhook fetch error: ${err.message}`);
     });
+}
+
+async function postToWebhook(webhookUrl, dataPayload, jobName) {
+    if (!webhookUrl || webhookUrl.trim() === '') return;
+    try {
+        await fetch(webhookUrl, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ job: jobName, timestamp: new Date().toISOString(), data: dataPayload })
+        });
+    } catch (error) {
+        console.error("AI-Digger: Webhook POST failed", error);
+    }
 }
 
 // Helper: AI Extraction Caller
