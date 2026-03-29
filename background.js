@@ -1467,23 +1467,24 @@ function getRandomDelay(min, max) {
 async function archiveCurrentRun() {
     if (scrapedData.length === 0) return;
 
-    // Capture state synchronously before any await
-    const jobName = currentJob ? currentJob.jobName : "Unknown Job";
-    const currentData = [...scrapedData];
+    // Capture state synchronously BEFORE the await yields execution
+    const jobNameToSave = currentJob ? currentJob.jobName : "Unknown Job";
+    const dataToSave = [...scrapedData];
+    const countToSave = scrapedData.length;
 
     const res = await chrome.storage.local.get(['runHistory']);
     let history = res.runHistory || [];
 
     const runRecord = {
         id: Date.now(),
-        jobName: jobName,
+        jobName: jobNameToSave,
         date: new Date().toLocaleString(),
-        count: currentData.length,
-        data: currentData // Deep copy
+        count: countToSave,
+        data: dataToSave
     };
 
     history.unshift(runRecord); // Add to top of history
-    if (history.length > 50) history.pop(); // Keep only the last 50 runs to save memory
+    if (history.length > 50) history.pop(); // Keep only the last 50 runs
 
     await chrome.storage.local.set({ runHistory: history });
 }

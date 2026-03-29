@@ -1682,3 +1682,10 @@ document.getElementById('btn-clear-history').addEventListener('click', () => {
 updateStatus();
 renderRunHistory();
 setInterval(updateStatus, 2000); // Poll every 2 seconds to update count live
+
+// Listen for changes to storage to auto-refresh the history UI live
+chrome.storage.onChanged.addListener((changes, namespace) => {
+    if (namespace === 'local' && changes.runHistory) {
+        renderRunHistory();
+    }
+});
