@@ -34,7 +34,8 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     } else if (message.action === 'STOP_JOB') {
         archiveCurrentRun();
         isRunning = false;
-        chrome.alarms.clear("nextJobStep");
+        currentJob = null;
+        chrome.alarms.clearAll(); // Nuke all pending alarms immediately
         chrome.storage.local.remove('jobState');
         addLog("Job stopped by user.");
         sendResponse({ status: 'stopped' });
@@ -291,6 +292,7 @@ async function processNextStep() {
             } else if (blueprint.scrapingType === 'single-page' && state.currentPage > state.maxPages) {
                 completeJob();
             } else {
+                if (!isRunning) return;
                 chrome.alarms.create("nextJobStep", { when: Date.now() + 60000 });
                 setTimeout(processNextStep, 1000);
             }
@@ -373,6 +375,7 @@ async function processNextStep() {
             state.deepCrawlIndex++;
             await chrome.storage.local.set({ jobState: state });
 
+            if (!isRunning) return;
             chrome.alarms.create("nextJobStep", { when: Date.now() + 60000 });
             setTimeout(processNextStep, delayMs);
 
@@ -385,6 +388,7 @@ async function processNextStep() {
 
             state.deepCrawlIndex++;
             await chrome.storage.local.set({ jobState: state });
+            if (!isRunning) return;
             chrome.alarms.create("nextJobStep", { when: Date.now() + 60000 });
             setTimeout(processNextStep, 1000);
         }
@@ -448,10 +452,12 @@ async function processNextStep() {
                  addLog(`Master job batch done. Switching to Deep Crawl for ${state.deepCrawlQueue.length} items...`);
                  state.isDeepCrawling = true;
                  await chrome.storage.local.set({ jobState: state });
+                 if (!isRunning) return;
                  chrome.alarms.create("nextJobStep", { when: Date.now() + 60000 });
                  setTimeout(processNextStep, delayMs);
             } else if (state.currentIndex < state.urlsToScrape.length) {
                 addLog(`Waiting ${delayMs}ms before next URL...`);
+                if (!isRunning) return;
                 chrome.alarms.create("nextJobStep", { when: Date.now() + 60000 });
                 setTimeout(processNextStep, delayMs);
             } else {
@@ -462,6 +468,7 @@ async function processNextStep() {
             addLog(`ERROR: Failed to load or scrape ${url}: ${error.message}`);
             state.currentIndex++;
             await chrome.storage.local.set({ jobState: state });
+            if (!isRunning) return;
             chrome.alarms.create("nextJobStep", { when: Date.now() + 60000 }); // 1 min fallback wake up
             setTimeout(processNextStep, 1000); // Retry next quickly
         }
@@ -557,6 +564,7 @@ async function processNextStep() {
                  addLog(`Master page scraped. Switching to Deep Crawl for ${state.deepCrawlQueue.length} items before continuing...`);
                  state.isDeepCrawling = true;
                  await chrome.storage.local.set({ jobState: state });
+                 if (!isRunning) return;
                  chrome.alarms.create("nextJobStep", { when: Date.now() + 60000 });
                  setTimeout(processNextStep, 1000);
                  return; // Exit here, processNextStep will handle resuming master later
@@ -564,6 +572,7 @@ async function processNextStep() {
 
             if (hasNextPage) {
                 addLog(`Waiting ${delayMs}ms before next page...`);
+                if (!isRunning) return;
                 chrome.alarms.create("nextJobStep", { when: Date.now() + 60000 }); // 1 min fallback wake up
                 setTimeout(processNextStep, delayMs + 2000);
             } else {
@@ -628,12 +637,15 @@ async function scrapeTab(tabId, job, url) {
         return null;
     });
 
+    if (!isRunning) return null; // Kill Switch 1
+
     if (extractedData && extractedData._pageMarkdown) {
         // Handle Self-Healing first
         if (extractedData._failedFields && extractedData._failedFields.length > 0) {
             addLog(`Attempting self-healing for ${extractedData._failedFields.length} failed fields...`);
             try {
                 const healedData = await processSelfHealing(tabId, job, extractedData._failedFields, extractedData._pageMarkdown);
+                if (!isRunning) return null; // Kill Switch 2
                 extractedData = { ...extractedData, ...healedData.recoveredValues };
 
                 // Update job blueprint locally
@@ -681,6 +693,7 @@ async function scrapeTab(tabId, job, url) {
             addLog("Processing AI extraction...");
             try {
                 const aiExtracted = await processAIExtraction(job, extractedData._pageMarkdown);
+                if (!isRunning) return null; // Kill Switch 3
 
                 // Merge AI items with deterministic items
                 if (aiExtracted.items && Array.isArray(aiExtracted.items)) {
