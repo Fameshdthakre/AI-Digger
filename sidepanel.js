@@ -214,6 +214,20 @@ document.getElementById('test-container-btn').addEventListener('click', async ()
     });
 });
 
+document.getElementById('inspect-scroll-container-btn').addEventListener('click', async () => {
+    const [tab] = await chrome.tabs.query({active: true, currentWindow: true});
+    await chrome.scripting.executeScript({ target: { tabId: tab.id }, files: ['turndown.js', 'content.js'] }).catch(console.error);
+
+    chrome.tabs.sendMessage(tab.id, { action: 'START_INSPECTOR_FOR_FIELD', fieldId: 'scroll-container-selector', mode: 'css' }, (response) => {
+        if (response && response.status === 'inspector_started') {
+            const btn = document.getElementById('inspect-scroll-container-btn');
+            btn.style.backgroundColor = '#e0f2fe';
+            btn.style.borderColor = '#3b82f6';
+            btn.innerText = '🎯';
+        }
+    });
+});
+
 // Inspect Container Button
 document.getElementById('inspect-container-btn').addEventListener('click', async () => {
     const [tab] = await chrome.tabs.query({active: true, currentWindow: true});
@@ -940,7 +954,8 @@ function getBlueprintFromUI() {
             nextButtonSelector: document.getElementById('next-button-selector').value,
             maxPages: parseInt(document.getElementById('max-pages').value),
             infiniteScroll: document.getElementById('enable-infinite-scroll').checked,
-            maxScrolls: parseInt(document.getElementById('max-scrolls').value)
+            maxScrolls: parseInt(document.getElementById('max-scrolls').value),
+            scrollContainerSelector: document.getElementById('scroll-container-selector').value
         }
     };
 }
@@ -1012,6 +1027,7 @@ document.getElementById('saved-jobs-select').addEventListener('change', (e) => {
         document.getElementById('enable-infinite-scroll').checked = false;
         document.getElementById('enable-infinite-scroll').dispatchEvent(new Event('change'));
         document.getElementById('max-scrolls').value = 5;
+        document.getElementById('scroll-container-selector').value = '';
 
         // Reset Automation
         document.getElementById('enable-schedule').checked = false;
@@ -1095,6 +1111,7 @@ document.getElementById('saved-jobs-select').addEventListener('change', (e) => {
         document.getElementById('enable-infinite-scroll').checked = blueprint.singlePageOptions.infiniteScroll || false;
         document.getElementById('enable-infinite-scroll').dispatchEvent(new Event('change'));
         document.getElementById('max-scrolls').value = blueprint.singlePageOptions.maxScrolls || 5;
+        document.getElementById('scroll-container-selector').value = blueprint.singlePageOptions.scrollContainerSelector || '';
     }
 
     // Set Actions
@@ -1327,6 +1344,16 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
             if (selectorInput) selectorInput.value = selector;
 
             const inspectBtn = document.getElementById('inspect-next-btn');
+            if (inspectBtn) {
+                inspectBtn.style.backgroundColor = 'var(--surface)';
+                inspectBtn.style.borderColor = 'var(--border)';
+                inspectBtn.innerText = '🔍';
+            }
+        } else if (fieldId === 'scroll-container-selector') {
+            const selectorInput = document.getElementById('scroll-container-selector');
+            if (selectorInput) selectorInput.value = selector;
+
+            const inspectBtn = document.getElementById('inspect-scroll-container-btn');
             if (inspectBtn) {
                 inspectBtn.style.backgroundColor = 'var(--surface)';
                 inspectBtn.style.borderColor = 'var(--border)';
@@ -1682,3 +1709,10 @@ document.getElementById('btn-clear-history').addEventListener('click', () => {
 updateStatus();
 renderRunHistory();
 setInterval(updateStatus, 2000); // Poll every 2 seconds to update count live
+
+// Listen for changes to storage to auto-refresh the history UI live
+chrome.storage.onChanged.addListener((changes, namespace) => {
+    if (namespace === 'local' && changes.runHistory) {
+        renderRunHistory();
+    }
+});

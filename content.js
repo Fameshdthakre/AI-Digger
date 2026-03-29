@@ -29,8 +29,29 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         sendResponse(data);
     }
     else if (message.action === 'SCROLL_BOTTOM') {
-        window.scrollBy(0, window.innerHeight);
-        sendResponse({ status: 'scrolled' });
+        const blueprint = message.blueprint || {};
+        let scrollTarget = window;
+        let currentScrollHeight = document.body.scrollHeight;
+
+        if (blueprint.singlePageOptions && blueprint.singlePageOptions.scrollContainerSelector) {
+            const container = document.querySelector(blueprint.singlePageOptions.scrollContainerSelector);
+            if (container) {
+                scrollTarget = container;
+                currentScrollHeight = container.scrollHeight;
+            } else {
+                console.warn("Scroll container not found, falling back to window.");
+            }
+        }
+
+        if (scrollTarget === window) {
+            window.scrollBy(0, window.innerHeight);
+        } else {
+            scrollTarget.scrollBy(0, scrollTarget.clientHeight || 800);
+        }
+
+        // Wait briefly for network/DOM updates (non-blocking for listener, handled by background sleep)
+        setTimeout(() => sendResponse({ status: 'scrolled' }), 100);
+        return true;
     }
     else if (message.action === 'START_AUTO_DETECT') {
         startAutoDetect();
