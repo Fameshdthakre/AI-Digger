@@ -315,6 +315,7 @@ async function processNextStep() {
             }
 
             let detailData = await scrapeTab(tab.id, state.detailBlueprint, detailUrl);
+            if (!isRunning) return; // Kill switch: user pressed stop during the scrape
 
             // Merge Data
             if (detailData) {
@@ -420,6 +421,7 @@ async function processNextStep() {
             }
 
             let extractedData = await scrapeTab(tab.id, blueprint, url);
+            if (!isRunning) return; // Kill switch: user pressed stop during the scrape
             if (extractedData) {
                 // If Deep Crawl is enabled, route data to queue instead of saving
                 if (blueprint.linkedDetailJob && state.detailBlueprint) {
@@ -506,6 +508,7 @@ async function processNextStep() {
 
             let [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
             let extractedData = await scrapeTab(tabId, blueprint, tab.url);
+            if (!isRunning) return; // Kill switch: user pressed stop during the scrape
             if (extractedData) {
                 if (blueprint.linkedDetailJob && state.detailBlueprint) {
                     enqueueForDeepCrawl(extractedData, state, tab.url, `Single_Page-${state.currentPage}`);
