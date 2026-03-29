@@ -669,7 +669,7 @@ document.getElementById('btn-auto-detect').addEventListener('click', async () =>
 
     chrome.tabs.sendMessage(tab.id, { action: 'START_AUTO_DETECT' }, (response) => {
         if (!response || response.status !== 'started') {
-            btn.innerText = '✨ Auto-Detect Data';
+            btn.innerText = '🎯 Smart Container Scan';
             btn.disabled = false;
         }
     });
@@ -678,7 +678,7 @@ document.getElementById('btn-auto-detect').addEventListener('click', async () =>
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     if (message.action === 'AUTO_DETECT_RESULT') {
         const btn = document.getElementById('btn-auto-detect');
-        btn.innerText = '✨ Auto-Detect Data';
+        btn.innerText = '🎯 Smart Container Scan';
         btn.disabled = false;
 
         if (message.fields && message.fields.length > 0) {
@@ -689,24 +689,6 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
                 const newRow = fieldsContainer.lastElementChild;
                 const cb = newRow.querySelector('.f-multiple');
                 if (cb) cb.checked = true; // Auto-detect implies arrays
-            });
-        }
-        sendResponse({ status: 'received' });
-    } else if (message.action === 'AI_ANALYZE_RESULT') {
-        const btn = document.getElementById('btn-ai-analyze');
-        btn.innerText = '🤖 AI Analysis';
-        btn.disabled = false;
-
-        if (message.error) {
-            showToast(`AI Analysis failed: ${message.error}`, "error");
-        } else if (message.fields && message.fields.length > 0) {
-            fieldsContainer.innerHTML = '';
-            fieldCount = 0;
-            message.fields.forEach(f => {
-                addFieldRow(f.name, f.selector, f.type || 'css', f.extractType || 'text', f.attributeName || '', f.format || 'raw');
-                const newRow = fieldsContainer.lastElementChild;
-                const cb = newRow.querySelector('.f-multiple');
-                if (cb) cb.checked = f.multiple || false;
             });
         }
         sendResponse({ status: 'received' });
@@ -760,29 +742,6 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         sendResponse({ status: 'received' });
     }
     return true;
-});
-
-// AI Analyze Logic
-document.getElementById('btn-ai-analyze').addEventListener('click', async () => {
-    const btn = document.getElementById('btn-ai-analyze');
-    btn.innerText = 'Analyzing...';
-    btn.disabled = true;
-
-    const [tab] = await chrome.tabs.query({active: true, currentWindow: true});
-    await chrome.scripting.executeScript({
-        target: { tabId: tab.id },
-        files: ['turndown.js', 'content.js']
-    }).catch(err => console.error(err));
-
-    chrome.tabs.sendMessage(tab.id, { action: 'GET_PAGE_TEXT' }, (response) => {
-        if (response && response.text) {
-            chrome.runtime.sendMessage({ action: 'ANALYZE_PAGE_AI', text: response.text });
-        } else {
-            btn.innerText = '🤖 AI Analysis';
-            btn.disabled = false;
-            showToast("Could not extract text from page to analyze.", "error");
-        }
-    });
 });
 
 // Initialize Default Fields

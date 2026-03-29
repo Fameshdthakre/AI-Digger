@@ -91,13 +91,24 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     }
     else if (message.action === 'GET_PAGE_TEXT') {
         try {
-            const turndownService = new TurndownService({ headingStyle: 'atx', codeBlockStyle: 'fenced' });
             const clone = document.body.cloneNode(true);
-            const scripts = clone.querySelectorAll('script, style, noscript, svg, iframe');
-            scripts.forEach(s => s.remove());
-            sendResponse({ text: turndownService.turndown(clone.innerHTML) });
+
+            // 1. Remove garbage to save LLM tokens
+            clone.querySelectorAll('script, style, noscript, svg, iframe, path, meta, link').forEach(s => s.remove());
+
+            // 2. Clean up massive text blocks that bloat tokens
+            const textNodes = document.createTreeWalker(clone, NodeFilter.SHOW_TEXT, null, false);
+            let node;
+            while (node = textNodes.nextNode()) {
+                if (node.nodeValue.trim().length > 200) {
+                    node.nodeValue = node.nodeValue.substring(0, 200) + '...';
+                }
+            }
+
+            sendResponse({ text: clone.innerHTML });
         } catch (e) {
-            sendResponse({ text: document.body.innerText.trim() });
+            console.error("AI-Digger: DOM Pruner failed, falling back to innerText", e);
+            sendResponse({ text: document.body.innerText });
         }
     }
     else if (message.action === 'TOGGLE_MACRO_RECORDING') {
