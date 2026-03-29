@@ -664,9 +664,7 @@ document.getElementById('btn-save-settings').addEventListener('click', () => {
     };
 
     chrome.storage.sync.set({ aiSettings: settings }, () => {
-        const msg = document.getElementById('settings-msg');
-        msg.style.display = 'block';
-        setTimeout(() => msg.style.display = 'none', 3000);
+        showToast("AI Settings saved successfully!", "success");
     });
 });
 

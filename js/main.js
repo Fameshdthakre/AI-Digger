@@ -245,9 +245,10 @@ document.getElementById('btn-stop').addEventListener('click', () => {
 
 // Clear Data
 document.getElementById('btn-clear').addEventListener('click', () => {
-    if(confirm("Are you sure you want to delete all scraped data?")) {
+    if(confirm("Are you sure you want to delete all stored data from the current run?")) {
         chrome.runtime.sendMessage({ action: 'CLEAR_DATA' }, () => {
             updateStatus();
+            showToast("Stored data cleared.", "success");
         });
     }
 });
