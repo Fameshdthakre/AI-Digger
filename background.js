@@ -75,11 +75,27 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         });
         sendResponse({ status: 'building' });
     } else if (message.action === 'PROCESS_AI_INSPECTOR') {
-        const prompt = `${PROMPTS.AI_INSPECTOR}\n\nHTML Snippet:\n"""\n${message.htmlSnippet}\n"""`;
-        generateSelectorWithAI(prompt).then(selector => {
-            chrome.runtime.sendMessage({ action: 'AI_SELECTOR_RESULT', fieldId: message.fieldId, selector: selector });
-        }).catch(err => {
-            chrome.runtime.sendMessage({ action: 'AI_SELECTOR_ERROR', fieldId: message.fieldId, error: err.message });
+        chrome.storage.sync.get(['aiSettings'], (res) => {
+            const settings = res.aiSettings;
+            const hasApiKey = settings && settings.aiPlatform && (
+                (settings.aiPlatform === 'openai' && settings.openai?.key) ||
+                (settings.aiPlatform === 'gemini' && settings.gemini?.key) ||
+                (settings.aiPlatform === 'claude' && settings.claude?.key)
+            );
+
+            if (!hasApiKey) {
+                chrome.runtime.sendMessage({ action: 'INSPECTOR_RESULT', fieldId: message.fieldId, selector: message.fallbackSelector });
+                return;
+            }
+
+            const promptTemplate = message.isContainer ? PROMPTS.AI_INSPECTOR_CONTAINER : PROMPTS.AI_INSPECTOR;
+            const prompt = `${promptTemplate}\n\nHTML Snippet:\n"""\n${message.htmlSnippet}\n"""`;
+
+            generateSelectorWithAI(prompt).then(selector => {
+                chrome.runtime.sendMessage({ action: 'AI_SELECTOR_RESULT', fieldId: message.fieldId, selector: selector });
+            }).catch(err => {
+                chrome.runtime.sendMessage({ action: 'INSPECTOR_RESULT', fieldId: message.fieldId, selector: message.fallbackSelector });
+            });
         });
         sendResponse({ status: 'processing' });
     } else if (message.action === 'PROCESS_AI_WAND') {
