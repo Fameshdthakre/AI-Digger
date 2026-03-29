@@ -414,27 +414,30 @@
                 </div>
             </div>
 
-            <div class="card" id="logs-card" style="display: none; flex-direction: column; height: 150px;">
-                <label>Execution Logs</label>
-                <div id="job-logs" style="flex: 1; overflow-y: auto; background: #f3f4f6; padding: 8px; border-radius: 4px; font-family: monospace; font-size: 11px; color: #374151; white-space: pre-wrap; border: 1px solid var(--border);"></div>
-            </div>
+        <div class="card mt-4" id="logs-card" style="display: none; flex-direction: column;">
+            <h3 style="margin-top: 0; margin-bottom: 8px; font-size: 13px;">Extraction Logs</h3>
+            <div id="job-logs" style="background: var(--bg); border: 1px solid var(--border); border-radius: 6px; padding: 8px; font-size: 11px; font-family: monospace; color: var(--text-muted); height: 100px; overflow-y: auto; white-space: pre-wrap;"></div>
+        </div>
 
-            <div class="card mt-4">
-                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
-                    <h3 style="margin: 0; font-size: 14px;">Past Job Runs</h3>
-                    <button id="btn-clear-history" style="background: transparent; border: 1px solid var(--border); color: var(--text-muted); padding: 4px 8px; border-radius: 4px; font-size: 11px; cursor: pointer;">Clear History</button>
-                </div>
-                <div id="run-history-list" style="max-height: 250px; overflow-y: auto; display: flex; flex-direction: column; gap: 8px;">
-                </div>
-            </div>
+        <button id="btn-stop" class="btn btn-danger mt-4 mb-4" style="display: none; width: 100%;">⏹ Stop Running Job</button>
 
-            <div class="card">
-                <button id="btn-stop" class="btn btn-danger mb-4" style="display: none;">⏹ Stop Running Job</button>
-                <label>Export Data</label>
-                <button id="btn-export-csv" class="btn btn-primary mt-2">Download as CSV</button>
-                <button id="btn-export-excel" class="btn btn-primary mt-2" style="background-color: #10b981; border-color: #10b981;">Download as Excel (.xlsx)</button>
-                <button id="btn-clear" class="btn btn-outline mt-2">Clear Stored Data</button>
+        <div class="card mt-4">
+            <h3 style="margin-top: 0; margin-bottom: 12px; font-size: 14px;">Export Current Data</h3>
+            <div style="display: flex; gap: 8px;">
+                <button id="btn-export-csv" class="btn secondary" style="flex: 1;">Download CSV</button>
+                <button id="btn-export-excel" class="btn secondary" style="flex: 1;">Download Excel</button>
             </div>
+            <button id="btn-clear" class="btn danger mt-4" style="width: 100%;">Clear Current Session Data</button>
+        </div>
+
+        <div class="card mt-4">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
+                <h3 style="margin: 0; font-size: 14px;">Past Job Runs</h3>
+                <button id="btn-clear-history" style="background: transparent; border: 1px solid var(--border); color: var(--text-muted); padding: 4px 8px; border-radius: 4px; font-size: 11px; cursor: pointer;">Clear History</button>
+            </div>
+            <div id="run-history-list" style="max-height: 250px; overflow-y: auto; display: flex; flex-direction: column; gap: 8px;">
+                </div>
+        </div>
         </div>
 
         <!-- SETTINGS VIEW -->
