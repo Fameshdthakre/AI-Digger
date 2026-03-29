@@ -455,7 +455,7 @@ async function processNextStep() {
                 addLog(`Scrolling ${maxScrolls} times...`);
                 for (let s = 0; s < maxScrolls; s++) {
                     if (!isRunning) return;
-                    await chrome.tabs.sendMessage(tabId, { action: 'SCROLL_BOTTOM' }).catch(()=>null);
+                    await chrome.tabs.sendMessage(tabId, { action: 'SCROLL_BOTTOM', blueprint: blueprint }).catch(()=>null);
                     await sleep(getRandomDelay(blueprint.antiBot.minDelayMs, blueprint.antiBot.maxDelayMs));
                 }
             }
