@@ -240,7 +240,11 @@ function handleSaveJobClick(btnElement) {
     });
 }
 
-document.getElementById('btn-save-job').addEventListener('click', function() { handleSaveJobClick(this); });
+// Bind Top Save Button
+document.getElementById('btn-save-job')?.addEventListener('click', function() { handleSaveJobClick(this); });
+
+// Bind Bottom Save Button
+document.getElementById('btn-save-job-bottom')?.addEventListener('click', function() { handleSaveJobClick(this); });
 
 document.getElementById('saved-jobs-select').addEventListener('change', (e) => {
     const jobName = e.target.value;

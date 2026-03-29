@@ -5,6 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Universal Scraper</title>
     <link rel="stylesheet" href="css/sidepanel.css">
+    <style>@keyframes pulse { 0% { opacity: 1; } 50% { opacity: 0.4; } 100% { opacity: 1; } }</style>
 </head>
 <body>
 
@@ -263,12 +264,18 @@
                 <div class="stat-number" id="stat-count">0</div>
                 <div id="status-indicator" style="font-size: 12px; color: var(--text-muted); margin-top: 8px;">Idle</div>
 
-                <div id="progress-container" style="display: none; margin-top: 12px; text-align: left;">
-                    <label style="display: flex; justify-content: space-between;">
-                        <span>Progress</span>
+                <div id="progress-container" style="display: none; margin-top: 16px;">
+                    <div style="display: flex; justify-content: space-between; font-size: 11px; margin-bottom: 4px; color: var(--text-muted);">
                         <span id="progress-text">0 / 0</span>
-                    </label>
+                        <span id="progress-percent">0%</span>
+                    </div>
                     <progress id="job-progress" value="0" max="100" style="width: 100%; height: 8px; border-radius: 4px; overflow: hidden;"></progress>
+                    <div style="margin-top: 12px; display: flex; align-items: center; justify-content: center;">
+                        <span id="live-rows-badge" style="background-color: var(--success); color: white; padding: 4px 12px; border-radius: 12px; font-size: 12px; font-weight: 600; display: inline-flex; align-items: center; gap: 6px; box-shadow: var(--shadow-sm);">
+                            <span class="pulse-dot" style="width: 8px; height: 8px; background-color: white; border-radius: 50%; display: inline-block; animation: pulse 1.5s infinite;"></span>
+                            Rows Extracted: <span id="live-rows-count">0</span>
+                        </span>
+                    </div>
                 </div>
             </div>
 
@@ -395,7 +402,10 @@
         </label>
     </div>
     <div class="sticky-footer" id="build-footer" style="flex-direction: column; gap: 8px;">
-        <button id="btn-start" class="btn btn-primary" style="width: 100%; font-size: 15px; padding: 12px;">▶ Start Scraping Job</button>
+        <div style="display: flex; gap: 8px; width: 100%;">
+            <button id="btn-save-job-bottom" class="btn" style="flex: 1; background-color: var(--surface); color: var(--primary); border: 1px solid var(--primary); font-weight: 600;">💾 Save Job</button>
+            <button id="btn-start" class="btn btn-primary" style="flex: 2; font-size: 14px; padding: 12px;">▶ Start Scraping Job</button>
+        </div>
         <div class="brand-line">Created with ❤️ by <strong><a href="https://www.linkedin.com/in/famesh-thakre-6a2825118" target="_blank" style="color: inherit; text-decoration: none;">TransFamesh</a></strong>.</div>
     </div>
 
