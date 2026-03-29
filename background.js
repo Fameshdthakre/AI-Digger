@@ -1,3 +1,5 @@
+importScripts('js/prompts.js');
+
 /**
  * background.js
  * The "Brain" of the extension. Manages the queue of URLs, applies randomized delays,
@@ -776,6 +778,8 @@ function saveExtractedData(data, url, pageIndex) {
         triggerWebhook(currentJob?.webhookUrl, row);
     });
 
+    postToWebhook(currentJob.webhookUrl, rowsToSave, currentJob.jobName);
+
     chrome.storage.local.set({ scrapedData: scrapedData });
 }
 
@@ -792,6 +796,19 @@ function triggerWebhook(url, data) {
     });
 }
 
+async function postToWebhook(webhookUrl, dataPayload, jobName) {
+    if (!webhookUrl || webhookUrl.trim() === '') return;
+    try {
+        await fetch(webhookUrl, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ job: jobName, timestamp: new Date().toISOString(), data: dataPayload })
+        });
+    } catch (error) {
+        console.error("AI-Digger: Webhook POST failed", error);
+    }
+}
+
 // Helper: AI Extraction Caller
 async function processAIExtraction(blueprint, text) {
     const settingsObj = await chrome.storage.sync.get(['aiSettings']);
@@ -805,10 +822,7 @@ async function processAIExtraction(blueprint, text) {
     if (aiFields.length === 0) return {};
 
     // Build the prompt
-    let prompt = "You are an expert data extraction agent. Extract the requested fields from the source Markdown.\n";
-    prompt += "Each item must represent a discrete row/card/product found in the text. ";
-    prompt += "If a field is missing, return null.\n\n";
-    prompt += "Fields to extract:\n";
+    let prompt = PROMPTS.EXTRACTION;
     aiFields.forEach(f => {
         prompt += `- "${f.name}": ${f.selector}\n`;
     });
@@ -945,11 +959,7 @@ async function processSelfHealing(tabId, job, failedFields, markdown) {
         throw new Error("AI Platform not configured for self-healing.");
     }
 
-    let basePrompt = "You are an expert web scraper recovery agent.\n";
-    basePrompt += "The following data fields failed to match any elements on the page using their current CSS/XPath selectors.\n";
-    basePrompt += "Given the page Markdown below, find the missing values for these fields, AND deduce a highly resilient, semantic CSS selector for them.\n";
-    basePrompt += "Prioritize attributes like data-testid, aria-label, or semantic class names over structural paths.\n\n";
-    basePrompt += "Failed Fields:\n";
+    let basePrompt = PROMPTS.SELF_HEALING;
     failedFields.forEach(f => {
         basePrompt += `- Name: "${f.name}", Old Selector: "${f.selector}"\n`;
     });
@@ -1125,9 +1135,7 @@ async function analyzePageWithAI(text) {
         throw new Error("AI Platform not configured in settings. Please setup your API keys in the Settings tab.");
     }
 
-    const systemPrompt = `You are an expert web scraping architect. Analyze the provided webpage text content.
-Determine the page archetype (e.g., E-commerce grid, Vendor Listing, Article) and identify the optimal data fields a user would want to extract.
-For each field, write a clear, precise AI extraction prompt (e.g., "What is the price of the item?").`;
+    const systemPrompt = PROMPTS.ANALYZE_PAGE;
 
     const truncatedText = text.substring(0, 20000);
     const prompt = `${systemPrompt}\n\nWebpage Text:\n"""\n${truncatedText}\n"""`;
@@ -1255,29 +1263,7 @@ async function generateBlueprintWithAI(userPrompt, text) {
         throw new Error("AI Platform not configured in settings. Please setup your API keys in the Settings tab.");
     }
 
-        const systemPrompt = `You are an expert web scraper architect.
-I will provide you with a user request and a pruned HTML snippet of the target webpage.
-
-Your job is to generate a JSON blueprint to scrape this data.
-CRITICAL: You MUST analyze the provided HTML snippet. Generate EXACT CSS selectors using the classes, IDs, and data-* attributes present in the HTML. Do not hallucinate generic selectors. If a field asks for a link, use extractType "href". If it asks for an image, use "src".
-
-Output ONLY a valid JSON object matching this exact schema:
-{
-    "jobName": "Descriptive Name",
-    "scrapingType": "single-page" | "multi-url",
-    "outputFormat": "flat" | "grouped",
-    "containerSelector": "CSS selector for the repeating item box (if applicable, else empty)",
-    "fields": [
-        {
-            "name": "Field Name",
-            "selector": "Exact CSS Selector derived from HTML",
-            "type": "css",
-            "extractType": "text" | "href" | "src" | "attribute",
-            "attributeName": "If extractType is attribute, put name here",
-            "multiple": false
-        }
-    ]
-}`;
+    const systemPrompt = PROMPTS.MAGIC_BUILD;
 
     const truncatedText = text.substring(0, 20000);
     const prompt = `${systemPrompt}\n\nUser Request:\n"${userPrompt}"\n\nWebpage HTML:\n"""\n${truncatedText}\n"""`;

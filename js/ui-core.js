@@ -205,8 +205,8 @@ document.getElementById('test-container-btn').addEventListener('click', async ()
     const [tab] = await chrome.tabs.query({active: true, currentWindow: true});
     await chrome.scripting.executeScript({
         target: { tabId: tab.id },
-        files: ['turndown.js', 'content.js']
-    }).catch(err => console.error("Failed to inject content.js:", err));
+        files: ['turndown.js', 'js/content/inspector.js', 'js/content/macros.js', 'js/content/auto-detect.js', 'js/content/extractor.js', 'js/content/main.js']
+    }).catch(err => console.error("Failed to inject content scripts:", err));
 
     chrome.tabs.sendMessage(tab.id, { action: 'TEST_SELECTOR', field: fieldData }, (response) => {
         testBtn.innerText = '🧪';
@@ -240,8 +240,8 @@ document.getElementById('test-scroll-container-btn').addEventListener('click', a
     const [tab] = await chrome.tabs.query({active: true, currentWindow: true});
     await chrome.scripting.executeScript({
         target: { tabId: tab.id },
-        files: ['turndown.js', 'content.js']
-    }).catch(err => console.error("Failed to inject content.js:", err));
+        files: ['turndown.js', 'js/content/inspector.js', 'js/content/macros.js', 'js/content/auto-detect.js', 'js/content/extractor.js', 'js/content/main.js']
+    }).catch(err => console.error("Failed to inject content scripts:", err));
 
     chrome.tabs.sendMessage(tab.id, { action: 'TEST_SELECTOR', field: fieldData }, (response) => {
         testBtn.innerText = '🧪';
@@ -258,7 +258,7 @@ document.getElementById('test-scroll-container-btn').addEventListener('click', a
 
 document.getElementById('inspect-scroll-container-btn').addEventListener('click', async () => {
     const [tab] = await chrome.tabs.query({active: true, currentWindow: true});
-    await chrome.scripting.executeScript({ target: { tabId: tab.id }, files: ['turndown.js', 'content.js'] }).catch(console.error);
+    await chrome.scripting.executeScript({ target: { tabId: tab.id }, files: ['turndown.js', 'js/content/inspector.js', 'js/content/macros.js', 'js/content/auto-detect.js', 'js/content/extractor.js', 'js/content/main.js'] }).catch(console.error);
 
     chrome.tabs.sendMessage(tab.id, { action: 'START_INSPECTOR_FOR_FIELD', fieldId: 'scroll-container-selector', mode: 'css' }, (response) => {
         if (response && response.status === 'inspector_started') {
@@ -275,8 +275,8 @@ document.getElementById('inspect-container-btn').addEventListener('click', async
     const [tab] = await chrome.tabs.query({active: true, currentWindow: true});
     await chrome.scripting.executeScript({
         target: { tabId: tab.id },
-        files: ['turndown.js', 'content.js']
-    }).catch(err => console.error("Failed to inject content.js:", err));
+        files: ['turndown.js', 'js/content/inspector.js', 'js/content/macros.js', 'js/content/auto-detect.js', 'js/content/extractor.js', 'js/content/main.js']
+    }).catch(err => console.error("Failed to inject content scripts:", err));
 
     chrome.tabs.sendMessage(tab.id, { action: 'START_INSPECTOR_FOR_FIELD', fieldId: 'item-container-selector', mode: 'css' }, (response) => {
         if (response && response.status === 'inspector_started') {
@@ -307,8 +307,8 @@ document.getElementById('test-next-btn').addEventListener('click', async () => {
     const [tab] = await chrome.tabs.query({active: true, currentWindow: true});
     await chrome.scripting.executeScript({
         target: { tabId: tab.id },
-        files: ['turndown.js', 'content.js']
-    }).catch(err => console.error("Failed to inject content.js:", err));
+        files: ['turndown.js', 'js/content/inspector.js', 'js/content/macros.js', 'js/content/auto-detect.js', 'js/content/extractor.js', 'js/content/main.js']
+    }).catch(err => console.error("Failed to inject content scripts:", err));
 
     chrome.tabs.sendMessage(tab.id, { action: 'TEST_SELECTOR', field: fieldData }, (response) => {
         testBtn.innerText = '🧪';
@@ -330,8 +330,8 @@ document.getElementById('inspect-next-btn').addEventListener('click', async () =
     // Inject script programmatically if it's not already there
     await chrome.scripting.executeScript({
         target: { tabId: tab.id },
-        files: ['turndown.js', 'content.js']
-    }).catch(err => console.error("Failed to inject content.js:", err));
+        files: ['turndown.js', 'js/content/inspector.js', 'js/content/macros.js', 'js/content/auto-detect.js', 'js/content/extractor.js', 'js/content/main.js']
+    }).catch(err => console.error("Failed to inject content scripts:", err));
 
     chrome.tabs.sendMessage(tab.id, { action: 'START_INSPECTOR_FOR_FIELD', fieldId: 'next-button-selector', mode: 'css' }, (response) => {
         if (response && response.status === 'inspector_started') {
@@ -443,8 +443,8 @@ function addFieldRow(name = '', selector = '', type = 'css', extractType = 'text
         // Inject script programmatically if it's not already there
         await chrome.scripting.executeScript({
             target: { tabId: tab.id },
-            files: ['turndown.js', 'content.js']
-        }).catch(err => console.error("Failed to inject content.js:", err));
+            files: ['turndown.js', 'js/content/inspector.js', 'js/content/macros.js', 'js/content/auto-detect.js', 'js/content/extractor.js', 'js/content/main.js']
+        }).catch(err => console.error("Failed to inject content scripts:", err));
 
         const mode = typeSelect.value; // css or xpath
 
@@ -477,8 +477,8 @@ function addFieldRow(name = '', selector = '', type = 'css', extractType = 'text
 
         await chrome.scripting.executeScript({
             target: { tabId: tab.id },
-            files: ['turndown.js', 'content.js']
-        }).catch(err => console.error("Failed to inject content.js:", err));
+            files: ['turndown.js', 'js/content/inspector.js', 'js/content/macros.js', 'js/content/auto-detect.js', 'js/content/extractor.js', 'js/content/main.js']
+        }).catch(err => console.error("Failed to inject content scripts:", err));
 
         chrome.tabs.sendMessage(tab.id, { action: 'TEST_SELECTOR', field: fieldData }, (response) => {
             testBtn.innerText = '🧪';
@@ -549,8 +549,8 @@ function addActionRow(type = 'click', selector = '', text = '') {
 
         await chrome.scripting.executeScript({
             target: { tabId: tab.id },
-            files: ['turndown.js', 'content.js']
-        }).catch(err => console.error("Failed to inject content.js:", err));
+            files: ['turndown.js', 'js/content/inspector.js', 'js/content/macros.js', 'js/content/auto-detect.js', 'js/content/extractor.js', 'js/content/main.js']
+        }).catch(err => console.error("Failed to inject content scripts:", err));
 
         chrome.tabs.sendMessage(tab.id, { action: 'TEST_SELECTOR', field: fieldData }, (response) => {
             testBtn.innerText = '🧪';
@@ -569,7 +569,7 @@ function addActionRow(type = 'click', selector = '', text = '') {
         const [tab] = await chrome.tabs.query({active: true, currentWindow: true});
         await chrome.scripting.executeScript({
             target: { tabId: tab.id },
-            files: ['turndown.js', 'content.js']
+            files: ['turndown.js', 'js/content/inspector.js', 'js/content/macros.js', 'js/content/auto-detect.js', 'js/content/extractor.js', 'js/content/main.js']
         }).catch(err => console.error(err));
 
         chrome.tabs.sendMessage(tab.id, { action: 'START_INSPECTOR_FOR_FIELD', fieldId: actionId, mode: 'css' }, (response) => {
