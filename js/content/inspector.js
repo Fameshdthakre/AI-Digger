@@ -37,20 +37,53 @@ function startInspector(fieldId, mode) {
     document.addEventListener('mouseover', handleMouseOver, true);
     document.addEventListener('click', handleClick, true);
     document.addEventListener('keydown', handleInspectorKeyDown, true);
+
+    createInspectorUIPanel();
 }
 
 function stopInspector() {
     inspectorActive = false;
     document.body.style.cursor = 'default';
     if (overlayBox) overlayBox.remove();
+    var ui = document.getElementById('ai-digger-inspector-ui');
+    if (ui) ui.remove();
     document.removeEventListener('mouseover', handleMouseOver, true);
     document.removeEventListener('click', handleClick, true);
     document.removeEventListener('keydown', handleInspectorKeyDown, true);
     currentInspectFieldId = null;
 }
 
+function createInspectorUIPanel() {
+    var ui = document.createElement('div');
+    ui.id = 'ai-digger-inspector-ui';
+    ui.style.position = 'fixed';
+    ui.style.bottom = '20px';
+    ui.style.right = '20px';
+    ui.style.zIndex = '1000000';
+    ui.style.background = '#3b82f6';
+    ui.style.color = 'white';
+    ui.style.padding = '12px 20px';
+    ui.style.borderRadius = '8px';
+    ui.style.fontFamily = 'sans-serif';
+    ui.style.boxShadow = '0 10px 25px rgba(0,0,0,0.2)';
+    ui.innerHTML = `
+        <div style="font-weight: bold; margin-bottom: 4px;">🔍 Visual Inspector Mode</div>
+        <div style="font-size: 12px; margin-bottom: 8px;"><b>Ctrl + Click</b> (or Cmd + Click) on an element to capture its AI selector.</div>
+        <div style="font-size: 11px; margin-bottom: 12px; opacity: 0.8;">Press Esc to cancel</div>
+        <button id="ai-digger-cancel-inspector" style="background: white; color: #3b82f6; border: none; padding: 6px 12px; border-radius: 4px; cursor: pointer; font-weight: bold; font-size: 12px;">Cancel</button>
+    `;
+    document.body.appendChild(ui);
+    document.getElementById('ai-digger-cancel-inspector').addEventListener('click', function() {
+        stopInspector();
+        chrome.runtime.sendMessage({ action: 'INSPECTOR_CANCELLED', fieldId: currentInspectFieldId });
+    });
+}
+
 function handleMouseOver(e) {
     if (!inspectorActive) return;
+    var ui = document.getElementById('ai-digger-inspector-ui');
+    if (ui && ui.contains(e.target)) return;
+
     hoveredElement = e.target;
 
     const rect = hoveredElement.getBoundingClientRect();
@@ -62,6 +95,10 @@ function handleMouseOver(e) {
 
 function handleClick(e) {
     if (!inspectorActive) return;
+
+    var ui = document.getElementById('ai-digger-inspector-ui');
+    if (ui && ui.contains(e.target)) return;
+
     e.preventDefault();
     e.stopPropagation();
 
