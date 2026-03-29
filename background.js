@@ -543,7 +543,14 @@ async function ensureScriptInjected(tabId) {
     try {
         await chrome.scripting.executeScript({
             target: { tabId: tabId },
-            files: ['turndown.js', 'content.js']
+            files: [
+                'turndown.js',
+                'js/content/inspector.js',
+                'js/content/macros.js',
+                'js/content/auto-detect.js',
+                'js/content/extractor.js',
+                'js/content/main.js'
+            ]
         });
     } catch (err) {
         addLog(`Note: content script inject err (may already exist)`);

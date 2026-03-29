@@ -1,10 +1,10 @@
 // js/content/inspector.js
 
-let inspectorActive = false;
-let hoveredElement = null;
-let overlayBox = null;
-let currentInspectFieldId = null;
-let currentInspectMode = 'css';
+var inspectorActive = false;
+var hoveredElement = null;
+var overlayBox = null;
+var currentInspectFieldId = null;
+var currentInspectMode = 'css';
 
 function handleInspectorKeyDown(e) {
     if (e.key === 'Escape') {

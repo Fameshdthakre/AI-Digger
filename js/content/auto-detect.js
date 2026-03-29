@@ -1,6 +1,6 @@
 // js/content/auto-detect.js
 
-let autoDetectActive = false;
+var autoDetectActive = false;
 
 function handleAutoDetectKeyDown(e) {
     if (e.key === 'Escape') {

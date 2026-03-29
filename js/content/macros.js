@@ -1,6 +1,6 @@
 // js/content/macros.js
 
-let isRecordingMacro = false;
+var isRecordingMacro = false;
 
 function startMacroRecording() {
     isRecordingMacro = true;
