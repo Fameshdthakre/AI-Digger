@@ -104,22 +104,8 @@ document.getElementById('btn-export-excel').addEventListener('click', () => {
             const workbook = XLSX.utils.book_new();
             XLSX.utils.book_append_sheet(workbook, worksheet, "Scraped Data");
 
-            // Generate raw memory buffer instead of relying on DOM writeFile
-            const excelBuffer = XLSX.write(workbook, { bookType: 'xlsx', type: 'array' });
-            const blob = new Blob([excelBuffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
-            const url = URL.createObjectURL(blob);
-
-            const a = document.createElement('a');
-            a.style.display = 'none';
-            a.href = url;
-            a.download = getExportFilename('xlsx');
-            document.body.appendChild(a);
-            a.click();
-
-            setTimeout(() => {
-                document.body.removeChild(a);
-                URL.revokeObjectURL(url);
-            }, 100);
+            // Use SheetJS's native downloader (bypasses Blob/URL restrictions)
+            XLSX.writeFile(workbook, getExportFilename('xlsx'));
         } catch (error) {
             console.error("Excel Export Error:", error);
             showToast("Failed to export to Excel. Please ensure the data format is correct.", "error");
@@ -235,12 +221,17 @@ function exportHistoryItem(runId, type) {
             const blob = new Blob([new Uint8Array([0xEF, 0xBB, 0xBF]), csvRows.join('\n')], { type: 'text/csv;charset=utf-8;' });
             triggerDownload(blob, filename);
         } else {
-            const worksheet = XLSX.utils.json_to_sheet(cleanData);
-            const workbook = XLSX.utils.book_new();
-            XLSX.utils.book_append_sheet(workbook, worksheet, "Data");
-            const excelBuffer = XLSX.write(workbook, { bookType: 'xlsx', type: 'array' });
-            const blob = new Blob([excelBuffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
-            triggerDownload(blob, filename);
+            try {
+                const worksheet = XLSX.utils.json_to_sheet(cleanData);
+                const workbook = XLSX.utils.book_new();
+                XLSX.utils.book_append_sheet(workbook, worksheet, "Data");
+
+                // Use SheetJS's native downloader
+                XLSX.writeFile(workbook, filename);
+            } catch (error) {
+                console.error("Excel History Export Error:", error);
+                showToast(`Excel Error: ${error.message || "Data format issue"}`, "error");
+            }
         }
     });
 }
