@@ -214,6 +214,41 @@ document.getElementById('test-container-btn').addEventListener('click', async ()
     });
 });
 
+// Test Scroll Container Button
+document.getElementById('test-scroll-container-btn').addEventListener('click', async () => {
+    const selectorInput = document.getElementById('scroll-container-selector');
+    if (!selectorInput.value) return;
+
+    const testBtn = document.getElementById('test-scroll-container-btn');
+    const previewBox = document.getElementById('scroll-preview-box');
+
+    testBtn.innerText = '⏳';
+    const fieldData = {
+        name: 'Scroll Container Test',
+        selector: selectorInput.value,
+        type: 'css',
+        extractType: 'exists'
+    };
+
+    const [tab] = await chrome.tabs.query({active: true, currentWindow: true});
+    await chrome.scripting.executeScript({
+        target: { tabId: tab.id },
+        files: ['turndown.js', 'content.js']
+    }).catch(err => console.error("Failed to inject content.js:", err));
+
+    chrome.tabs.sendMessage(tab.id, { action: 'TEST_SELECTOR', field: fieldData }, (response) => {
+        testBtn.innerText = '🧪';
+        previewBox.style.display = 'block';
+        if (response && response.result) {
+            previewBox.style.color = '#10b981';
+            previewBox.innerText = "Scroll container found!";
+        } else {
+            previewBox.style.color = '#ef4444';
+            previewBox.innerText = "Scroll container not found.";
+        }
+    });
+});
+
 document.getElementById('inspect-scroll-container-btn').addEventListener('click', async () => {
     const [tab] = await chrome.tabs.query({active: true, currentWindow: true});
     await chrome.scripting.executeScript({ target: { tabId: tab.id }, files: ['turndown.js', 'content.js'] }).catch(console.error);
