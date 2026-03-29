@@ -535,8 +535,8 @@ function addActionRow(type = 'click', selector = '', text = '') {
                 <option value="type" ${type === 'type' ? 'selected' : ''}>Type Text</option>
                 <option value="wait" ${type === 'wait' ? 'selected' : ''}>Wait For</option>
             </select>
-            <button class="btn-wand" title="Describe to AI" style="flex-shrink: 0; padding: 4px 8px; font-size: 14px; background: transparent; border: 1px solid var(--border); border-radius: 4px; border-top-right-radius: 0; border-bottom-right-radius: 0; cursor: pointer; border-right: none; ${type === 'ai' ? 'display: none;' : ''}">🪄</button>
-            <button class="btn-parent-wand" title="Find Parent Container with AI" style="flex-shrink: 0; padding: 4px 8px; font-size: 14px; background: transparent; border: 1px solid var(--border); border-radius: 4px; border-top-left-radius: 0; border-bottom-left-radius: 0; cursor: pointer; ${type === 'ai' ? 'display: none;' : ''}">📦</button>
+            <button class="btn-wand" title="Describe to AI" style="flex-shrink: 0; padding: 4px 8px; font-size: 14px; background: transparent; border: 1px solid var(--border); border-radius: 4px; border-top-right-radius: 0; border-bottom-right-radius: 0; cursor: pointer; border-right: none;">🪄</button>
+            <button class="btn-parent-wand" title="Find Parent Container with AI" style="flex-shrink: 0; padding: 4px 8px; font-size: 14px; background: transparent; border: 1px solid var(--border); border-radius: 4px; border-top-left-radius: 0; border-bottom-left-radius: 0; cursor: pointer;">📦</button>
             <button class="inspect-btn a-inspect" title="Inspect Selector" style="flex-shrink: 0;">🔍</button>
             <button class="test-btn a-test" title="Test Action" style="flex-shrink: 0;">🧪</button>
             <input type="text" placeholder="CSS or XPath Selector" class="a-selector" value="${selector}" style="flex: 1;" />

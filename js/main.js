@@ -25,6 +25,7 @@ document.addEventListener('click', async (e) => {
         await chrome.scripting.executeScript({ target: { tabId: tab.id }, files: ['js/content/main.js'] }).catch(()=>null);
 
         chrome.tabs.sendMessage(tab.id, { action: 'GET_PAGE_TEXT' }, (response) => {
+            if (chrome.runtime.lastError) return;
             if (response && response.text) {
                 chrome.runtime.sendMessage({ action: 'PROCESS_AI_WAND', fieldId, query, html: response.text });
             } else {
@@ -52,6 +53,7 @@ document.addEventListener('click', async (e) => {
         }).catch(err => console.error("Failed to inject content scripts:", err));
 
         chrome.tabs.sendMessage(tab.id, { action: 'START_INSPECTOR_FOR_FIELD', fieldId: fieldId, mode: 'parent' }, (response) => {
+            if (chrome.runtime.lastError) return;
             if (response && response.status === 'inspector_started') {
                 wandBtn.style.backgroundColor = 'var(--magic-bg)';
                 wandBtn.style.borderColor = 'var(--magic-border)';
@@ -294,6 +296,7 @@ document.getElementById('btn-auto-detect').addEventListener('click', async () =>
     }).catch(err => console.error(err));
 
     chrome.tabs.sendMessage(tab.id, { action: 'START_AUTO_DETECT' }, (response) => {
+        if (chrome.runtime.lastError) return;
         if (!response || response.status !== 'started') {
             btn.innerText = '🎯 Smart Container Scan';
             btn.disabled = false;
@@ -343,6 +346,7 @@ document.getElementById('btn-generate-blueprint').addEventListener('click', asyn
     }).catch(err => console.error(err));
 
     chrome.tabs.sendMessage(tab.id, { action: 'GET_PAGE_TEXT' }, (response) => {
+        if (chrome.runtime.lastError) return;
         if (response && response.text) {
             chrome.runtime.sendMessage({
                 action: 'MAGIC_BUILD_BLUEPRINT',
