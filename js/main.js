@@ -470,3 +470,36 @@ chrome.storage.onChanged.addListener((changes, namespace) => {
         renderRunHistory();
     }
 });
+
+// --- Dynamic UI & Feedback Logic ---
+
+// Auto-set the version badge based on manifest
+const manifest = chrome.runtime.getManifest();
+const appVersion = manifest.version;
+const badgeEl = document.getElementById('app-version-badge');
+if (badgeEl) badgeEl.innerText = `v${appVersion}`;
+
+// Feedback Button Logic
+document.getElementById('btn-feedback')?.addEventListener('click', () => {
+    // 1. Base URL
+    const baseUrl = "https://docs.google.com/forms/d/e/1FAIpQLSd6PMcPs0clpdj_-sUg6yLBCx1lZAHUnjxypWartxsSNA6NpA/viewform?usp=pp_url";
+
+    // 2. Add App Version
+    const versionParam = `&entry.2030262534=${encodeURIComponent(appVersion)}`;
+
+    // 3. Attempt to get User Email (Graceful fallback if permission denied/unavailable)
+    if (chrome.identity && chrome.identity.getProfileUserInfo) {
+        chrome.identity.getProfileUserInfo((userInfo) => {
+            const email = userInfo.email || '';
+            openForm(email);
+        });
+    } else {
+        openForm('');
+    }
+
+    function openForm(userEmail) {
+        const emailParam = userEmail ? `&entry.1847764537=${encodeURIComponent(userEmail)}` : "";
+        const finalUrl = baseUrl + versionParam + emailParam;
+        chrome.tabs.create({ url: finalUrl });
+    }
+});

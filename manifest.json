@@ -10,7 +10,9 @@
     "tabs",
     "downloads",
     "sidePanel",
-    "alarms"
+    "alarms",
+    "identity",
+    "identity.email"
   ],
   "host_permissions": [
     "<all_urls>",

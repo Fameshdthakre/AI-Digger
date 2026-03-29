@@ -413,7 +413,7 @@ input:checked + .slider { background-color: var(--primary); }
 input:checked + .slider:before { transform: translateX(16px); }
 
 /* Unified Header & Footer */
-.header-container { display: flex; flex-direction: column; align-items: flex-start; gap: 2px; margin-bottom: 16px; }
+.header-container { display: flex; flex-direction: row; justify-content: space-between; align-items: flex-start; gap: 2px; margin-bottom: 16px; width: 100%; }
 .header-title-row { display: flex; align-items: center; gap: 8px; }
 .header-title-row h1 { margin: 0; font-size: 20px; color: var(--text-main); font-family: 'Google Sans', 'Roboto', sans-serif; }
 .brand-line { text-align: center; font-size: 11px; color: var(--text-muted); padding-top: 8px; margin-bottom: 0; }
