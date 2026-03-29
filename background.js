@@ -760,17 +760,12 @@ function generateFlatRows(data, blueprint, url, pageIndex) {
 function saveExtractedData(data, url, pageIndex) {
     if (!data) return;
 
-    let rowsToSave = [];
+    // FIX: Remove the bypass shortcut. Always route data through generateFlatRows
+    let rowsToSave = generateFlatRows(data, currentJob, url, pageIndex);
 
-    // Check if `data` is already a flat row array (e.g. from enqueue fallback or deep crawl completion)
-    if (data.Timestamp && (data.URL || url)) {
-         rowsToSave = [data]; // Single pre-flattened row
-    } else {
-         rowsToSave = generateFlatRows(data, currentJob, url, pageIndex);
-    }
     // Push clean rows to global storage and trigger webhooks
     rowsToSave.forEach(row => {
-        // Clean up internal keys just in case
+        // Clean up internal keys
         delete row['_failedFields'];
         delete row['_pageMarkdown'];
 
