@@ -183,6 +183,18 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
             if (wandBtn) wandBtn.innerText = '🪄';
         }
         showToast(`AI Error: ${message.error}`, "error");
+    } else if (message.action === 'INSPECTOR_CANCELLED') {
+        const row = document.getElementById(message.fieldId);
+        // Also check standalone buttons like container selectors
+        const standaloneBtn = document.getElementById(`inspect-${message.fieldId.replace('-selector', '-btn')}`);
+
+        const targetBtn = standaloneBtn || (row ? (row.querySelector('.inspect-btn') || row.querySelector('.a-inspect')) : null);
+
+        if (targetBtn) {
+            targetBtn.style.backgroundColor = 'var(--surface)';
+            targetBtn.style.borderColor = 'var(--border)';
+            targetBtn.innerText = '🔍';
+        }
     }
     return true;
 });

@@ -7,10 +7,10 @@ var currentInspectFieldId = null;
 var currentInspectMode = 'css';
 
 function handleInspectorKeyDown(e) {
-    if (e.key === 'Escape') {
+    if (e.key === 'Escape' && inspectorActive) {
+        e.preventDefault();
         stopInspector();
-        // Send empty response to unblock if needed
-        chrome.runtime.sendMessage({ action: 'INSPECTOR_RESULT', fieldId: currentInspectFieldId, selector: '' });
+        chrome.runtime.sendMessage({ action: 'INSPECTOR_CANCELLED', fieldId: currentInspectFieldId });
     }
 }
 
@@ -67,25 +67,35 @@ function handleClick(e) {
 
     var target = e.target;
 
-    // 1. Mark the target
-    target.setAttribute('data-ai-target', 'true');
+    // 1. Generate the standard fallback selector locally
+    var fallbackData = typeof generateResilientSelectors === 'function' ? generateResilientSelectors(target) : [{ type: 'css', val: '' }];
+    var fallbackSelector = currentInspectMode === 'xpath' ? generateXPath(target) : fallbackData[0].val;
 
-    // 2. Get contextual wrapper (go up 2 levels if possible to give AI context)
+    // 2. Technical Bypass: If CTRL or CMD is held, skip AI and instantly return the local selector
+    if (e.ctrlKey || e.metaKey) {
+        chrome.runtime.sendMessage({
+            action: 'AI_SELECTOR_RESULT', // Reuse this action to populate the UI instantly
+            fieldId: currentInspectFieldId,
+            selector: fallbackSelector
+        });
+        stopInspector();
+        return;
+    }
+
+    // 3. Otherwise, proceed with AI Inspector
+    target.setAttribute('data-ai-target', 'true');
     var contextNode = target.parentElement ? (target.parentElement.parentElement || target.parentElement) : target;
     var clone = contextNode.cloneNode(true);
 
-    // 3. Strip heavy garbage
     clone.querySelectorAll('script, style, svg, path, noscript').forEach(n => n.remove());
-
     var htmlSnippet = clone.outerHTML;
-
-    // 4. Clean up the actual page
     target.removeAttribute('data-ai-target');
 
     chrome.runtime.sendMessage({
         action: 'PROCESS_AI_INSPECTOR',
         fieldId: currentInspectFieldId,
-        htmlSnippet: htmlSnippet
+        htmlSnippet: htmlSnippet,
+        fallbackSelector: fallbackSelector
     });
 
     stopInspector();
