@@ -1368,12 +1368,24 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
 // 2. Start Job
 document.getElementById('btn-start').addEventListener('click', () => {
     const blueprint = getBlueprintFromUI();
+    const shouldAppend = document.getElementById('append-data-toggle').checked;
 
-    chrome.runtime.sendMessage({ action: 'START_JOB', blueprint }, () => {
-        // Switch to run tab
-        document.querySelector('[data-target="view-run"]').click();
-        updateStatus();
-    });
+    const startTheJob = () => {
+        chrome.runtime.sendMessage({ action: 'START_JOB', blueprint }, () => {
+            // Switch to run tab
+            document.querySelector('[data-target="view-run"]').click();
+            updateStatus();
+        });
+    };
+
+    if (!shouldAppend) {
+        // Auto-clear old data so the new export is perfectly clean
+        chrome.runtime.sendMessage({ action: 'CLEAR_DATA' }, () => {
+            startTheJob();
+        });
+    } else {
+        startTheJob();
+    }
 });
 
 // 3. Stop Job

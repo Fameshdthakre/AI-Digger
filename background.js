@@ -741,6 +741,7 @@ function generateFlatRows(data, blueprint, url, pageIndex) {
 
     const attachMetadata = (rows) => {
         rows.forEach(r => {
+            r['JobName'] = blueprint.jobName || "Unnamed Job";
             r['URL'] = url || data.URL || "No URL";
             r['Timestamp'] = data.Timestamp || new Date().toISOString();
             r['PageIndex'] = pageIndex || "1";
