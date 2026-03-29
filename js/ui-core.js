@@ -642,9 +642,21 @@ platformSelect.addEventListener('change', (e) => {
     document.getElementById(`card-${e.target.value}`).classList.add('active-provider');
 });
 
+// Theme Selection Logic
+const appThemeSelect = document.getElementById('app-theme');
+appThemeSelect.addEventListener('change', (e) => {
+    const theme = e.target.value;
+    if (theme === 'system') {
+        document.documentElement.removeAttribute('data-theme');
+    } else {
+        document.documentElement.setAttribute('data-theme', theme);
+    }
+});
+
 // Save Settings
 document.getElementById('btn-save-settings').addEventListener('click', () => {
     const settings = {
+        theme: appThemeSelect.value,
         aiPlatform: platformSelect.value,
         openai: { key: document.getElementById('key-openai').value, model: document.getElementById('model-openai').value },
         gemini: { key: document.getElementById('key-gemini').value, model: document.getElementById('model-gemini').value },
@@ -662,6 +674,10 @@ document.getElementById('btn-save-settings').addEventListener('click', () => {
 chrome.storage.sync.get(['aiSettings'], (result) => {
     if (result.aiSettings) {
         const s = result.aiSettings;
+        if (s.theme) {
+            appThemeSelect.value = s.theme;
+            appThemeSelect.dispatchEvent(new Event('change'));
+        }
         if (s.aiPlatform) {
             platformSelect.value = s.aiPlatform;
             platformSelect.dispatchEvent(new Event('change'));
