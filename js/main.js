@@ -2,9 +2,8 @@
 
 // Global Listener for Wand Clicks
 document.addEventListener('click', async (e) => {
-    if (e.target.closest('.btn-wand') || e.target.closest('.btn-parent-wand')) {
-        const wandBtn = e.target.closest('.btn-wand') || e.target.closest('.btn-parent-wand');
-        const isParentWand = wandBtn.classList.contains('btn-parent-wand');
+    if (e.target.closest('.btn-wand')) {
+        const wandBtn = e.target.closest('.btn-wand');
 
         let fieldId = null;
         const row = wandBtn.closest('.field-row');
@@ -16,16 +15,10 @@ document.addEventListener('click', async (e) => {
 
         if (!fieldId) return;
 
-        let query = "";
-        if (isParentWand) {
-            query = prompt("Describe the repeating item container you want to find (e.g., 'The main product card containing the image and price')");
-        } else {
-            query = prompt("What element do you want to find here? (e.g., 'The author name under the title')");
-        }
+        const query = prompt("What element do you want to find here? (e.g., 'The author name under the title')");
 
         if (!query) return;
 
-        const originalText = wandBtn.innerText;
         wandBtn.innerText = '⏳';
 
         const [tab] = await chrome.tabs.query({active: true, currentWindow: true});
@@ -33,11 +26,36 @@ document.addEventListener('click', async (e) => {
 
         chrome.tabs.sendMessage(tab.id, { action: 'GET_PAGE_TEXT' }, (response) => {
             if (response && response.text) {
-                const actionType = isParentWand ? 'PROCESS_AI_PARENT_WAND' : 'PROCESS_AI_WAND';
-                chrome.runtime.sendMessage({ action: actionType, fieldId, query, html: response.text });
+                chrome.runtime.sendMessage({ action: 'PROCESS_AI_WAND', fieldId, query, html: response.text });
             } else {
-                wandBtn.innerText = originalText;
+                wandBtn.innerText = '🪄';
                 showToast("Could not read page.", "error");
+            }
+        });
+    } else if (e.target.closest('.btn-parent-wand')) {
+        // Start visual inspector in parent mode
+        const wandBtn = e.target.closest('.btn-parent-wand');
+        let fieldId = null;
+        const row = wandBtn.closest('.field-row');
+        if (row) {
+            fieldId = row.id;
+        } else if (wandBtn.closest('#item-container-selector-row')) {
+            fieldId = 'item-container-selector';
+        }
+
+        if (!fieldId) return;
+
+        const [tab] = await chrome.tabs.query({active: true, currentWindow: true});
+        await chrome.scripting.executeScript({
+            target: { tabId: tab.id },
+            files: ['turndown.js', 'js/content/inspector.js', 'js/content/macros.js', 'js/content/auto-detect.js', 'js/content/extractor.js', 'js/content/main.js']
+        }).catch(err => console.error("Failed to inject content scripts:", err));
+
+        chrome.tabs.sendMessage(tab.id, { action: 'START_INSPECTOR_FOR_FIELD', fieldId: fieldId, mode: 'parent' }, (response) => {
+            if (response && response.status === 'inspector_started') {
+                wandBtn.style.backgroundColor = 'var(--magic-bg)';
+                wandBtn.style.borderColor = 'var(--magic-border)';
+                wandBtn.innerText = '🎯';
             }
         });
     }
@@ -225,16 +243,25 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         showToast(`AI Error: ${message.error}`, "error");
         sendResponse({ status: 'received' });
     } else if (message.action === 'INSPECTOR_CANCELLED') {
-        const row = document.getElementById(message.fieldId);
-        // Also check standalone buttons like container selectors
-        const standaloneBtn = document.getElementById(`inspect-${message.fieldId.replace('-selector', '-btn')}`);
+        if (message.fieldId) {
+            const row = document.getElementById(message.fieldId);
+            // Also check standalone buttons like container selectors
+            const standaloneBtn = document.getElementById(`inspect-${message.fieldId.replace('-selector', '-btn')}`);
+            const standaloneParentBtn = document.getElementById(`parent-${message.fieldId.replace('-selector', '-btn')}`);
 
-        const targetBtn = standaloneBtn || (row ? (row.querySelector('.inspect-btn') || row.querySelector('.a-inspect')) : null);
+            const targetBtn = standaloneBtn || (row ? (row.querySelector('.inspect-btn') || row.querySelector('.a-inspect')) : null);
+            const parentBtn = standaloneParentBtn || (row ? row.querySelector('.btn-parent-wand') : null);
 
-        if (targetBtn) {
-            targetBtn.style.backgroundColor = 'var(--surface)';
-            targetBtn.style.borderColor = 'var(--border)';
-            targetBtn.innerText = '🔍';
+            if (targetBtn) {
+                targetBtn.style.backgroundColor = 'var(--surface)';
+                targetBtn.style.borderColor = 'var(--border)';
+                targetBtn.innerText = '🔍';
+            }
+            if (parentBtn) {
+                parentBtn.style.backgroundColor = 'transparent';
+                parentBtn.style.borderColor = 'var(--border)';
+                parentBtn.innerText = '📦';
+            }
         }
         sendResponse({ status: 'received' });
     }

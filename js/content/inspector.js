@@ -68,7 +68,9 @@ function createInspectorUIPanel() {
     ui.style.boxShadow = '0 10px 25px rgba(0,0,0,0.2)';
     ui.innerHTML = `
         <div style="font-weight: bold; margin-bottom: 4px;">🔍 Visual Inspector Mode</div>
-        <div style="font-size: 12px; margin-bottom: 8px;"><b>Ctrl + Click</b> (or Cmd + Click) on an element to capture its AI selector.</div>
+        <div style="font-size: 12px; margin-bottom: 8px;">
+            ${currentInspectMode === 'parent' ? '<b>Click</b> on any item to automatically find its repeating parent container.' : '<b>Ctrl + Click</b> (or Cmd + Click) on an element to capture its AI selector.'}
+        </div>
         <div style="font-size: 11px; margin-bottom: 12px; opacity: 0.8;">Press Esc to cancel</div>
         <button id="ai-digger-cancel-inspector" style="background: white; color: #3b82f6; border: none; padding: 6px 12px; border-radius: 4px; cursor: pointer; font-weight: bold; font-size: 12px;">Cancel</button>
     `;
@@ -108,7 +110,31 @@ function handleClick(e) {
     var fallbackData = typeof generateResilientSelectors === 'function' ? generateResilientSelectors(target) : [{ type: 'css', val: '' }];
     var fallbackSelector = currentInspectMode === 'xpath' ? generateXPath(target) : fallbackData[0].val;
 
-    // 2. Technical Bypass: If CTRL or CMD is held, skip AI and instantly return the local selector
+    // 2. Handle Parent Container Mode (📦)
+    if (currentInspectMode === 'parent') {
+        let itemContainer = target;
+        let p = itemContainer.parentNode;
+        while (p && p !== document.body) {
+            if (p.children.length > 2 && p.children[0].tagName === p.children[1].tagName) {
+                itemContainer = p.children[0]; // Take the first child as the template
+                break;
+            }
+            p = p.parentNode;
+        }
+
+        var parentData = typeof generateResilientSelectors === 'function' ? generateResilientSelectors(itemContainer) : [{ type: 'css', val: '' }];
+        var parentSelector = parentData[0].val;
+
+        chrome.runtime.sendMessage({
+            action: 'AI_SELECTOR_RESULT',
+            fieldId: currentInspectFieldId,
+            selector: parentSelector
+        });
+        stopInspector();
+        return;
+    }
+
+    // 3. Technical Bypass: If CTRL or CMD is held, skip AI and instantly return the local selector
     if (e.ctrlKey || e.metaKey) {
         chrome.runtime.sendMessage({
             action: 'AI_SELECTOR_RESULT', // Reuse this action to populate the UI instantly
@@ -119,7 +145,7 @@ function handleClick(e) {
         return;
     }
 
-    // 3. Otherwise, proceed with AI Inspector
+    // 4. Otherwise, proceed with AI Inspector
     target.setAttribute('data-ai-target', 'true');
     var contextNode = target.parentElement ? (target.parentElement.parentElement || target.parentElement) : target;
     var clone = contextNode.cloneNode(true);
