@@ -8,16 +8,12 @@
 </head>
 <body>
 
-    <header>
-        <div class="header-left">
-            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                <rect width="24" height="24" rx="6" fill="var(--primary)"/>
-                <path d="M7 6H12.5C15.5376 6 18 8.46243 18 11.5C18 14.5376 15.5376 17 12.5 17H7V6Z" fill="white"/>
-                <path d="M9.5 8.5V14.5H12.5C14.1569 14.5 15.5 13.1569 15.5 11.5C15.5 9.84315 14.1569 8.5 12.5 8.5H9.5Z" fill="var(--primary)"/>
-            </svg>
-            <h1>AI Digger<span class="badge">v1.0 Beta</span></h1>
+    <header class="header-container">
+        <div class="header-title-row">
+            <h1>AI Digger</h1>
+            <span class="badge">v1.0 Beta</span>
         </div>
-        <span style="font-size: 12px; color: var(--text-muted);">Smart Web Scraper</span>
+        <span style="font-size: 12px; color: var(--text-muted); font-weight: 500;">Smart Web Scraper</span>
     </header>
 
     <div class="tabs">
@@ -49,6 +45,9 @@
                     <button id="btn-export-job" class="btn btn-outline" style="width: auto; padding: 6px 10px; font-size: 12px;">Export</button>
                     <button id="btn-import-job" class="btn btn-outline" style="width: auto; padding: 6px 10px; font-size: 12px;">Import</button>
                     <button id="btn-delete-job" class="btn btn-danger" style="width: auto; padding: 6px 10px; font-size: 12px;">Delete</button>
+                </div>
+                <div style="text-align: center; margin-top: 16px; padding-top: 16px; border-top: 1px dashed var(--profile-border);">
+                    <button id="btn-save-job" class="btn btn-primary" style="width: 60%; background-color: var(--primary); border-color: var(--primary);">💾 Save Current Job</button>
                 </div>
             </div>
             <input type="file" id="import-file-input" accept=".json" style="display: none;" />
@@ -280,23 +279,29 @@
 
         <button id="btn-stop" class="btn btn-danger mt-4 mb-4" style="display: none; width: 100%;">⏹ Stop Running Job</button>
 
-        <div class="card mt-4">
-            <h3 style="margin-top: 0; margin-bottom: 12px; font-size: 14px;">Export Current Data</h3>
-            <div style="display: flex; gap: 8px;">
-                <button id="btn-export-csv" class="btn btn-outline" style="flex: 1;">Download CSV</button>
-                <button id="btn-export-excel" class="btn btn-outline" style="flex: 1;">Download Excel</button>
+            <div class="card">
+                <button id="btn-stop" class="btn btn-danger mb-4" style="display: none;">⏹ Stop Running Job</button>
+                <label>Export Data</label>
+                <button id="btn-export-csv" class="btn btn-primary mt-2" style="background-color: #3b82f6; border-color: #3b82f6;">📊 Download as CSV</button>
+                <button id="btn-export-excel" class="btn btn-primary mt-2" style="background-color: #10b981; border-color: #10b981;">📗 Download as Excel (.xlsx)</button>
+                <button id="btn-clear" class="btn btn-outline mt-2">🗑️ Clear Stored Data</button>
             </div>
-            <button id="btn-clear" class="btn btn-danger mt-4" style="width: 100%;">Clear Current Session Data</button>
-        </div>
 
-        <div class="card mt-4">
-            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
-                <h3 style="margin: 0; font-size: 14px;">Past Job Runs</h3>
-                <button id="btn-clear-history" style="background: transparent; border: 1px solid var(--border); color: var(--text-muted); padding: 4px 8px; border-radius: 4px; font-size: 11px; cursor: pointer;">Clear History</button>
-            </div>
-            <div id="run-history-list" style="max-height: 250px; overflow-y: auto; display: flex; flex-direction: column; gap: 8px;">
+            <div class="card mt-4">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
+                    <h3 style="margin: 0; font-size: 14px;">Past Job Runs</h3>
+                    <div style="display: flex; gap: 8px; align-items: center;">
+                        <button id="btn-delete-selected-history" style="display: none; background: #fee2e2; border: 1px solid #fca5a5; color: #ef4444; padding: 4px 8px; border-radius: 4px; font-size: 11px; cursor: pointer;">Delete Selected</button>
+                        <button id="btn-clear-history" style="background: transparent; border: 1px solid var(--border); color: var(--text-muted); padding: 4px 8px; border-radius: 4px; font-size: 11px; cursor: pointer;">Clear All</button>
+                    </div>
                 </div>
-        </div>
+                <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 8px; padding-bottom: 8px; border-bottom: 1px solid var(--border);">
+                    <input type="checkbox" id="hist-select-all" style="width: 14px; height: 14px; margin: 0; cursor: pointer;" title="Select All" />
+                    <label for="hist-select-all" style="margin: 0; font-size: 11px; cursor: pointer;">Select All</label>
+                </div>
+                <div id="run-history-list" style="max-height: 250px; overflow-y: auto; display: flex; flex-direction: column; gap: 8px;">
+                </div>
+            </div>
         </div>
 
         <!-- SETTINGS VIEW -->
@@ -318,7 +323,7 @@
                     <div class="form-group">
                         <div class="password-group">
                             <input type="password" id="key-openai" placeholder="sk-..." />
-                            <button type="button" class="toggle-vis" data-target="key-openai">👁️</button>
+                            <button type="button" class="toggle-vis" data-target="key-openai">🙈</button>
                         </div>
                         <input type="text" id="model-openai" list="models-openai" placeholder="Model (e.g. gpt-4o)" />
                         <datalist id="models-openai">
@@ -334,7 +339,7 @@
                     <div class="form-group">
                         <div class="password-group">
                             <input type="password" id="key-gemini" placeholder="AIza..." />
-                            <button type="button" class="toggle-vis" data-target="key-gemini">👁️</button>
+                            <button type="button" class="toggle-vis" data-target="key-gemini">🙈</button>
                         </div>
                         <input type="text" id="model-gemini" list="models-gemini" placeholder="Model (e.g. gemini-2.5-flash)" />
                         <datalist id="models-gemini">
@@ -350,7 +355,7 @@
                     <div class="form-group">
                         <div class="password-group">
                             <input type="password" id="key-claude" placeholder="sk-ant-..." />
-                            <button type="button" class="toggle-vis" data-target="key-claude">👁️</button>
+                            <button type="button" class="toggle-vis" data-target="key-claude">🙈</button>
                         </div>
                         <input type="text" id="model-claude" list="models-claude" placeholder="Model (e.g. claude-3-5-sonnet-20241022)" />
                         <datalist id="models-claude">
@@ -366,18 +371,21 @@
             </div>
         </div>
 
-        <div class="brand-line">Created with ❤️ by <strong><a href="https://www.linkedin.com/in/famesh-thakre-6a2825118" target="_blank" style="color: inherit; text-decoration: none;">TransFamesh</a></strong>.</div>
     </div>
 
-    <div style="padding: 10px 20px; border-top: 1px solid var(--border); background: var(--surface);">
-        <label class="checkbox-label" style="justify-content: center; font-size: 13px; cursor: pointer;">
+    <div style="padding: 12px 20px; border-top: 1px solid var(--border); background: var(--surface); display: flex; justify-content: space-between; align-items: center;">
+        <div>
+            <div style="font-weight: 600; font-size: 13px; color: var(--text-main);">Append Mode</div>
+            <div style="font-size: 11px; color: var(--text-muted);">Keep previous data for next run</div>
+        </div>
+        <label class="switch">
             <input type="checkbox" id="append-data-toggle" />
-            Append to previous run data (Do not clear)
+            <span class="slider"></span>
         </label>
     </div>
-    <div class="sticky-footer" id="build-footer">
-        <button id="btn-start" class="btn btn-primary" style="flex: 2;">▶ Start Scraping Job</button>
-        <button id="btn-save-job-footer" class="btn btn-outline" style="flex: 1; background: var(--surface);">Save Job</button>
+    <div class="sticky-footer" id="build-footer" style="flex-direction: column; gap: 8px;">
+        <button id="btn-start" class="btn btn-primary" style="width: 100%; font-size: 15px; padding: 12px;">▶ Start Scraping Job</button>
+        <div class="brand-line">Created with ❤️ by <strong><a href="https://www.linkedin.com/in/famesh-thakre-6a2825118" target="_blank" style="color: inherit; text-decoration: none;">TransFamesh</a></strong>.</div>
     </div>
 
     <div id="toast-container"></div>
