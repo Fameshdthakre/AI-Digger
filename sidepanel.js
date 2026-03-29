@@ -1510,13 +1510,15 @@ document.getElementById('btn-export-csv').addEventListener('click', () => {
         
         // Create download blob with UTF-8 BOM so Excel parses special characters correctly
         const blob = new Blob([new Uint8Array([0xEF, 0xBB, 0xBF]), csvString], { type: 'text/csv;charset=utf-8;' });
-        const url = URL.createObjectURL(blob);
-        
-        chrome.downloads.download({
-            url: url,
-            filename: getExportFilename('csv'),
-            saveAs: true
-        });
+        const reader = new FileReader();
+        reader.onloadend = function() {
+            chrome.downloads.download({
+                url: reader.result,
+                filename: getExportFilename('csv'),
+                saveAs: true
+            });
+        };
+        reader.readAsDataURL(blob);
     });
 });
 
@@ -1538,13 +1540,15 @@ document.getElementById('btn-export-excel').addEventListener('click', () => {
             // Generate raw memory buffer instead of relying on DOM writeFile
             const excelBuffer = XLSX.write(workbook, { bookType: 'xlsx', type: 'array' });
             const blob = new Blob([excelBuffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
-            const url = URL.createObjectURL(blob);
-
-            chrome.downloads.download({
-                url: url,
-                filename: getExportFilename('xlsx'),
-                saveAs: true
-            });
+            const reader = new FileReader();
+            reader.onloadend = function() {
+                chrome.downloads.download({
+                    url: reader.result,
+                    filename: getExportFilename('xlsx'),
+                    saveAs: true
+                });
+            };
+            reader.readAsDataURL(blob);
         } catch (error) {
             console.error("Excel Export Error:", error);
             showToast("Failed to export to Excel. Please ensure the data format is correct.", "error");
