@@ -4,170 +4,19 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Universal Scraper</title>
-    <style>
-        /* Minimalist Modern UI - No external CSS required */
-        :root {
-            --bg: #f9fafb; --surface: #ffffff; --primary: #3b82f6; --primary-hover: #2563eb;
-            --text-main: #111827; --text-muted: #6b7280; --border: #e5e7eb; --danger: #ef4444;
-            --field-bg: #f9fafb; --preview-bg: #f3f4f6; --preview-text: #374151;
-            --magic-bg: #fdf4ff; --magic-border: #e879f9; --magic-text: #c026d3;
-            --profile-bg: #eff6ff; --profile-border: #bfdbfe;
-            --footer-bg: rgba(255, 255, 255, 0.85);
-        }
-
-        @media (prefers-color-scheme: dark) {
-            :root {
-                --bg: #0f172a; --surface: #1e293b; --primary: #3b82f6; --primary-hover: #60a5fa;
-                --text-main: #f8fafc; --text-muted: #94a3b8; --border: #334155; --danger: #f87171;
-                --field-bg: #0f172a; --preview-bg: #0f172a; --preview-text: #cbd5e1;
-                --magic-bg: #2d1b4e; --magic-border: #86198f; --magic-text: #e879f9;
-                --profile-bg: #1e3a8a; --profile-border: #1d4ed8;
-                --footer-bg: rgba(30, 41, 59, 0.85);
-            }
-            input, select, textarea { background-color: var(--surface); color: var(--text-main); color-scheme: dark; }
-            .btn-outline { color: var(--text-main); border-color: var(--border); }
-            .btn-outline:hover { background-color: var(--border); }
-            .inspect-btn, .test-btn, .remove-field { background-color: var(--surface); color: var(--text-main); border-color: var(--border); }
-            .btn-danger { background-color: #7f1d1d; color: #fca5a5; }
-            .remove-field:hover { background-color: #7f1d1d; border-color: #f87171; color: #fca5a5; }
-        }
-
-        body { font-family: system-ui, -apple-system, sans-serif; background: var(--bg); color: var(--text-main); width: 100%; height: 100vh; margin: 0; padding: 0; display: flex; flex-direction: column; }
-        header { background: var(--surface); padding: 16px 20px; border-bottom: 1px solid var(--border); display: flex; justify-content: space-between; align-items: center; flex-shrink: 0; }
-        h1 { margin: 0; font-size: 18px; font-weight: 700; color: var(--primary); }
-        .tabs { display: flex; border-bottom: 1px solid var(--border); background: var(--surface); flex-shrink: 0; }
-        .tab { flex: 1; padding: 12px; text-align: center; font-size: 14px; font-weight: 600; cursor: pointer; color: var(--text-muted); border-bottom: 2px solid transparent; }
-        .tab.active { color: var(--primary); border-bottom-color: var(--primary); }
-        
-        .container { padding: 20px; flex-grow: 1; overflow-y: auto; }
-        .view { display: none; }
-        .view.active { display: block; }
-        
-        .card { background: var(--surface); padding: 16px; border-radius: 8px; border: 1px solid var(--border); margin-bottom: 16px; box-shadow: 0 1px 2px rgba(0,0,0,0.05); }
-        .form-group { margin-bottom: 12px; }
-        label { display: block; font-size: 12px; font-weight: 600; color: var(--text-muted); margin-bottom: 4px; }
-        input, select, textarea { width: 100%; box-sizing: border-box; padding: 8px 12px; border: 1px solid var(--border); border-radius: 6px; font-size: 14px; outline: none; transition: border 0.2s; }
-        input:focus, select:focus, textarea:focus { border-color: var(--primary); }
-        textarea { resize: vertical; min-height: 60px; font-family: monospace; font-size: 12px;}
-        
-        .btn { display: inline-block; width: 100%; padding: 10px; font-size: 14px; font-weight: 600; text-align: center; border: none; border-radius: 6px; cursor: pointer; transition: background 0.2s; box-sizing: border-box; }
-        .btn-primary { background: var(--primary); color: white; }
-        .btn-primary:hover { background: var(--primary-hover); }
-        .btn-outline { background: transparent; border: 1px solid var(--border); color: var(--text-main); }
-        .btn-outline:hover { background: var(--bg); }
-        .btn-danger { background: #fee2e2; color: var(--danger); }
-        
-        .field-row { display: flex; flex-direction: column; gap: 8px; margin-bottom: 12px; padding: 12px; background: var(--field-bg); border: 1px solid var(--border); border-radius: 6px; }
-        .field-row input, .field-row select { margin-bottom: 0; }
-        .field-row-top, .field-row-bottom { display: flex; gap: 8px; align-items: center; }
-        .remove-field { background: var(--surface); border: 1px solid var(--border); color: var(--danger); cursor: pointer; font-size: 14px; padding: 6px; border-radius: 4px; display: flex; align-items: center; justify-content: center;}
-        .remove-field:hover { background: #fee2e2; border-color: #fca5a5; }
-        .inspect-btn { background: var(--surface); border: 1px solid var(--border); cursor: pointer; padding: 6px 10px; border-radius: 4px; font-size: 14px; display: flex; align-items: center; justify-content: center; }
-        .inspect-btn:hover { border-color: var(--primary); color: var(--primary); }
-        .test-btn { background: var(--surface); border: 1px solid var(--border); cursor: pointer; padding: 6px 10px; border-radius: 4px; font-size: 14px; display: flex; align-items: center; justify-content: center; }
-        .test-btn:hover { border-color: #10b981; color: #10b981; }
-        .preview-box { background: var(--preview-bg); border: 1px dashed var(--border); padding: 8px; border-radius: 4px; font-family: monospace; font-size: 11px; color: var(--preview-text); max-height: 80px; overflow-y: auto; white-space: pre-wrap; display: none; }
-        .checkbox-label { display: flex; align-items: center; gap: 4px; font-size: 11px; font-weight: normal; cursor: pointer; color: var(--text-muted); }
-        .checkbox-label input { width: auto; margin: 0; }
-        
-        /* Settings UI */
-        .password-group { display: flex; align-items: stretch; margin-bottom: 12px; }
-        .password-group input { border-radius: 6px 0 0 6px; border-right: none; margin-bottom: 0; }
-        .password-group button { border-radius: 0 6px 6px 0; border: 1px solid var(--border); background: var(--bg); color: var(--text-muted); cursor: pointer; padding: 0 12px; font-size: 14px; }
-        .provider-card { border-left: 3px solid var(--border); padding-left: 12px; margin-bottom: 16px; }
-        .provider-card.active-provider { border-left-color: var(--primary); }
-
-        /* Utility */
-        .flex { display: flex; gap: 12px; }
-        .flex-1 { flex: 1; }
-        .mt-2 { margin-top: 8px; }
-        .mt-4 { margin-top: 16px; }
-        .mb-4 { margin-bottom: 16px; }
-        
-        /* Stats */
-        .stat-box { text-align: center; padding: 20px; background: var(--surface); border-radius: 8px; border: 1px solid var(--border); }
-        .stat-number { font-size: 32px; font-weight: 800; color: var(--primary); }
-
-        /* Accordions */
-        details.card > summary {
-            list-style: none; /* Hide default arrow */
-            cursor: pointer;
-            margin: -16px;
-            padding: 16px;
-            display: flex;
-            align-items: center;
-        }
-        details.card > summary::-webkit-details-marker { display: none; } /* Safari */
-        details.card > summary::before {
-            content: '▶';
-            font-size: 10px;
-            display: inline-block;
-            margin-right: 8px;
-            transition: transform 0.2s ease-in-out;
-            color: var(--text-muted);
-        }
-        details.card[open] > summary {
-            border-bottom: 1px solid var(--border);
-            margin-bottom: 16px;
-        }
-        details.card[open] > summary::before {
-            transform: rotate(90deg);
-        }
-        .summary-title { color: var(--primary); font-size: 12px; font-weight: 600; }
-        .summary-subtitle { font-size: 11px; color: var(--text-muted); margin-left: 8px; font-weight: normal; }
-
-        /* Sticky Action Footer */
-        .sticky-footer {
-            position: sticky;
-            bottom: 0;
-            left: 0;
-            width: 100%;
-            padding: 16px 20px;
-            background: var(--footer-bg);
-            backdrop-filter: blur(8px);
-            border-top: 1px solid var(--border);
-            box-sizing: border-box;
-            display: flex;
-            gap: 12px;
-            z-index: 10;
-        }
-
-        /* Toasts */
-        #toast-container {
-            position: fixed;
-            bottom: 80px;
-            right: 20px;
-            display: flex;
-            flex-direction: column;
-            gap: 8px;
-            z-index: 9999;
-            pointer-events: none;
-        }
-        .toast {
-            background: var(--surface);
-            color: var(--text-main);
-            border: 1px solid var(--border);
-            border-left: 4px solid var(--primary);
-            padding: 12px 16px;
-            border-radius: 6px;
-            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
-            font-size: 13px;
-            font-weight: 500;
-            opacity: 0;
-            transform: translateX(100%);
-            transition: opacity 0.3s, transform 0.3s;
-            pointer-events: auto;
-        }
-        .toast.show { opacity: 1; transform: translateX(0); }
-        .toast.success { border-left-color: #10b981; }
-        .toast.error { border-left-color: #ef4444; }
-        .toast.info { border-left-color: #3b82f6; }
-    </style>
+    <link rel="stylesheet" href="css/sidepanel.css">
 </head>
 <body>
 
     <header>
-        <h1>AI Digger</h1>
+        <div class="header-left">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <rect width="24" height="24" rx="6" fill="var(--primary)"/>
+                <path d="M7 6H12.5C15.5376 6 18 8.46243 18 11.5C18 14.5376 15.5376 17 12.5 17H7V6Z" fill="white"/>
+                <path d="M9.5 8.5V14.5H12.5C14.1569 14.5 15.5 13.1569 15.5 11.5C15.5 9.84315 14.1569 8.5 12.5 8.5H9.5Z" fill="var(--primary)"/>
+            </svg>
+            <h1>AI Digger<span class="badge">v1.0 Beta</span></h1>
+        </div>
         <span style="font-size: 12px; color: var(--text-muted);">Smart Web Scraper</span>
     </header>
 
@@ -181,11 +30,11 @@
         
         <!-- BUILD VIEW -->
         <div id="view-build" class="view active">
-            <div class="card" style="background: #fdf4ff; border-color: #e879f9;">
-                <label style="color: #c026d3;">✨ Magic Build (Chat-to-Scrape)</label>
+            <div class="card" style="background: var(--magic-bg); border-color: var(--magic-border);">
+                <label style="color: var(--magic-text);">✨ Magic Build (Chat-to-Scrape)</label>
                 <div style="font-size: 11px; color: var(--text-muted); margin-bottom: 8px;">Describe what you want to extract and let AI build the entire scraper.</div>
                 <textarea id="nl-prompt" placeholder="e.g., Extract all product titles and prices, then click the next page button."></textarea>
-                <button id="btn-generate-blueprint" class="btn btn-primary" style="background-color: #c026d3; border-color: #c026d3; margin-top: 8px;">Generate Blueprint</button>
+                <button id="btn-generate-blueprint" class="btn btn-primary" style="background-color: var(--magic-text); border-color: var(--magic-text); margin-top: 8px;">Generate Blueprint</button>
             </div>
 
             <div class="card" style="background: var(--profile-bg); border-color: var(--profile-border);">
@@ -196,7 +45,7 @@
                     </select>
                 </div>
                 <div class="flex mt-2" style="justify-content: flex-end; gap: 4px;">
-                    <button id="btn-clone-job" class="btn btn-outline" style="width: auto; padding: 6px 10px; font-size: 12px; border-color: #3b82f6; color: #3b82f6;">Clone</button>
+                    <button id="btn-clone-job" class="btn btn-outline" style="width: auto; padding: 6px 10px; font-size: 12px; border-color: var(--primary); color: var(--primary);">Clone</button>
                     <button id="btn-export-job" class="btn btn-outline" style="width: auto; padding: 6px 10px; font-size: 12px;">Export</button>
                     <button id="btn-import-job" class="btn btn-outline" style="width: auto; padding: 6px 10px; font-size: 12px;">Import</button>
                     <button id="btn-delete-job" class="btn btn-danger" style="width: auto; padding: 6px 10px; font-size: 12px;">Delete</button>
@@ -252,7 +101,7 @@
                 <div id="actions-container"></div>
                 <div style="display: flex; gap: 8px; margin-top: 8px;">
                     <button id="add-action" class="btn btn-outline" style="font-size: 12px; padding: 6px; flex: 1;">+ Add Action</button>
-                    <button id="btn-record-macro" class="btn btn-outline" style="font-size: 12px; padding: 6px; flex: 1; border-color: #ef4444; color: #ef4444;">🔴 Record Actions</button>
+                    <button id="btn-record-macro" class="btn btn-outline" style="font-size: 12px; padding: 6px; flex: 1; border-color: var(--danger); color: var(--danger);">🔴 Record Actions</button>
                 </div>
             </details>
 
@@ -368,7 +217,7 @@
                 </div>
             </details>
 
-            <details class="card" style="margin-bottom: 80px;">
+            <details class="card" style="margin-bottom: 20px;">
                 <summary>
                     <span class="summary-title">Anti-Bot Settings (Delays)</span>
                     <span class="summary-subtitle" id="subtitle-antibot">Stealth Off, 2-5s</span>
@@ -431,10 +280,10 @@
         <div class="card mt-4">
             <h3 style="margin-top: 0; margin-bottom: 12px; font-size: 14px;">Export Current Data</h3>
             <div style="display: flex; gap: 8px;">
-                <button id="btn-export-csv" class="btn secondary" style="flex: 1;">Download CSV</button>
-                <button id="btn-export-excel" class="btn secondary" style="flex: 1;">Download Excel</button>
+                <button id="btn-export-csv" class="btn btn-outline" style="flex: 1;">Download CSV</button>
+                <button id="btn-export-excel" class="btn btn-outline" style="flex: 1;">Download Excel</button>
             </div>
-            <button id="btn-clear" class="btn danger mt-4" style="width: 100%;">Clear Current Session Data</button>
+            <button id="btn-clear" class="btn btn-danger mt-4" style="width: 100%;">Clear Current Session Data</button>
         </div>
 
         <div class="card mt-4">
@@ -514,6 +363,7 @@
             </div>
         </div>
 
+        <div class="brand-line">Created with ❤️ by <strong><a href="https://www.linkedin.com/in/famesh-thakre-6a2825118" target="_blank" style="color: inherit; text-decoration: none;">TransFamesh</a></strong>.</div>
     </div>
 
     <div style="padding: 10px 20px; border-top: 1px solid var(--border); background: var(--surface);">
@@ -530,6 +380,9 @@
     <div id="toast-container"></div>
 
     <script src="xlsx.full.min.js"></script>
-    <script src="sidepanel.js"></script>
+    <script src="js/ui-core.js"></script>
+    <script src="js/jobs.js"></script>
+    <script src="js/export.js"></script>
+    <script src="js/main.js"></script>
 </body>
 </html>
