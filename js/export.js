@@ -99,16 +99,22 @@ document.getElementById('btn-export-excel').addEventListener('click', () => {
         }
 
         try {
+            if (typeof XLSX === 'undefined') {
+                showToast("Excel library missing! Ensure xlsx.full.min.js is in your folder.", "error");
+                return;
+            }
             const cleanData = sanitizeDataForExport(data);
             const worksheet = XLSX.utils.json_to_sheet(cleanData);
             const workbook = XLSX.utils.book_new();
             XLSX.utils.book_append_sheet(workbook, worksheet, "Scraped Data");
 
-            // Use SheetJS's native downloader (bypasses Blob/URL restrictions)
-            XLSX.writeFile(workbook, getExportFilename('xlsx'));
+            // Use the safe Array Buffer + Blob method for Chrome Side Panels
+            const excelBuffer = XLSX.write(workbook, { bookType: 'xlsx', type: 'array' });
+            const blob = new Blob([excelBuffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+            triggerDownload(blob, getExportFilename('xlsx'));
         } catch (error) {
             console.error("Excel Export Error:", error);
-            showToast("Failed to export to Excel. Please ensure the data format is correct.", "error");
+            showToast("Failed to export to Excel. Data format issue.", "error");
         }
     });
 });
@@ -222,15 +228,17 @@ function exportHistoryItem(runId, type) {
             triggerDownload(blob, filename);
         } else {
             try {
+                if (typeof XLSX === 'undefined') throw new Error("XLSX library missing");
                 const worksheet = XLSX.utils.json_to_sheet(cleanData);
                 const workbook = XLSX.utils.book_new();
                 XLSX.utils.book_append_sheet(workbook, worksheet, "Data");
 
-                // Use SheetJS's native downloader
-                XLSX.writeFile(workbook, filename);
+                const excelBuffer = XLSX.write(workbook, { bookType: 'xlsx', type: 'array' });
+                const blob = new Blob([excelBuffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+                triggerDownload(blob, filename);
             } catch (error) {
                 console.error("Excel History Export Error:", error);
-                showToast(`Excel Error: ${error.message || "Data format issue"}`, "error");
+                showToast("Failed to export to Excel.", "error");
             }
         }
     });
