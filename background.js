@@ -30,6 +30,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         startJob(message.blueprint);
         sendResponse({ status: 'started' });
     } else if (message.action === 'STOP_JOB') {
+        archiveCurrentRun();
         isRunning = false;
         chrome.alarms.clear("nextJobStep");
         chrome.storage.local.remove('jobState');
@@ -529,6 +530,7 @@ async function processNextStep() {
 }
 
 function completeJob() {
+    archiveCurrentRun();
     isRunning = false;
     currentJob = null;
     chrome.storage.local.remove('jobState');
@@ -741,6 +743,7 @@ function generateFlatRows(data, blueprint, url, pageIndex) {
 
     const attachMetadata = (rows) => {
         rows.forEach(r => {
+            r['JobName'] = blueprint.jobName || "Unnamed Job";
             r['URL'] = url || data.URL || "No URL";
             r['Timestamp'] = data.Timestamp || new Date().toISOString();
             r['PageIndex'] = pageIndex || "1";
@@ -1459,4 +1462,28 @@ function getRandomDelay(min, max) {
     min = parseInt(min) || 1000;
     max = parseInt(max) || 3000;
     return Math.floor(Math.random() * (max - min + 1)) + min;
+}
+
+async function archiveCurrentRun() {
+    if (scrapedData.length === 0) return;
+
+    // Capture state synchronously before any await
+    const jobName = currentJob ? currentJob.jobName : "Unknown Job";
+    const currentData = [...scrapedData];
+
+    const res = await chrome.storage.local.get(['runHistory']);
+    let history = res.runHistory || [];
+
+    const runRecord = {
+        id: Date.now(),
+        jobName: jobName,
+        date: new Date().toLocaleString(),
+        count: currentData.length,
+        data: currentData // Deep copy
+    };
+
+    history.unshift(runRecord); // Add to top of history
+    if (history.length > 50) history.pop(); // Keep only the last 50 runs to save memory
+
+    await chrome.storage.local.set({ runHistory: history });
 }
