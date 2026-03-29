@@ -219,7 +219,7 @@ h1 { margin: 0; font-size: 18px; display: flex; align-items: center;}
 }
 
 
-.container { padding: 20px; flex-grow: 1; overflow-y: auto; }
+.container { padding: 20px; padding-bottom: 120px; flex-grow: 1; overflow-y: auto; }
 .view { display: none; }
 .view.active { display: block; }
 
