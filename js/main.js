@@ -280,11 +280,20 @@ function updateStatus() {
                 progBar.max = response.jobProgress.total;
                 progBar.value = response.jobProgress.current;
 
+                const percent = Math.round((response.jobProgress.current / response.jobProgress.total) * 100);
+                document.getElementById('progress-percent').innerText = `${percent}%`;
+
                 if (response.isDeepCrawling) {
                     progText.innerText = `Deep Crawl: ${response.jobProgress.current} / ${response.jobProgress.total}`;
                 } else {
-                    progText.innerText = `${response.jobProgress.current} / ${response.jobProgress.total}`;
+                    progText.innerText = `Scraping: ${response.jobProgress.current} / ${response.jobProgress.total}`;
                 }
+            }
+
+            // Update the live rows counter
+            const liveCountEl = document.getElementById('live-rows-count');
+            if (liveCountEl) {
+                liveCountEl.innerText = response.scrapedCount || 0;
             }
 
             if (response.jobLogs && response.jobLogs.length > 0) {
