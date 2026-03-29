@@ -131,39 +131,84 @@ function renderRunHistory() {
     chrome.storage.local.get(['runHistory'], (res) => {
         const list = document.getElementById('run-history-list');
         const history = res.runHistory || [];
+        const selectAllCb = document.getElementById('hist-select-all');
+        const btnDeleteSelected = document.getElementById('btn-delete-selected-history');
+
+        selectAllCb.checked = false;
+        btnDeleteSelected.style.display = 'none';
 
         if (history.length === 0) {
             list.innerHTML = '<div style="color: var(--text-muted); font-size: 12px; text-align: center; padding: 10px;">No past runs found.</div>';
+            selectAllCb.disabled = true;
             return;
         }
 
+        selectAllCb.disabled = false;
         list.innerHTML = '';
+
         history.forEach(run => {
             const item = document.createElement('div');
-            item.style.cssText = 'padding: 10px; border: 1px solid var(--border); border-radius: 6px; background: var(--bg); display: flex; justify-content: space-between; align-items: center;';
+            item.style.cssText = 'padding: 10px; border: 1px solid var(--border); border-radius: 6px; background: var(--bg); display: flex; justify-content: space-between; align-items: center; gap: 12px;';
 
             item.innerHTML = `
-                <div>
-                    <div style="font-weight: bold; font-size: 13px; color: var(--text-main);">${run.jobName}</div>
+                <input type="checkbox" class="hist-checkbox" data-id="${run.id}" style="width: 16px; height: 16px; margin: 0; cursor: pointer; flex-shrink: 0;" />
+                <div style="flex: 1; min-width: 0;">
+                    <div style="font-weight: bold; font-size: 13px; color: var(--text-main); white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${run.jobName}</div>
                     <div style="font-size: 11px; color: var(--text-muted); margin-top: 4px;">${run.date} • ${run.count} rows</div>
                 </div>
-                <div style="display: flex; gap: 6px;">
-                    <button class="btn-hist-csv" data-id="${run.id}" style="background: var(--surface); border: 1px solid var(--border); color: var(--text-main); padding: 4px 8px; border-radius: 4px; cursor: pointer; font-size: 11px;" title="Download CSV">CSV</button>
-                    <button class="btn-hist-excel" data-id="${run.id}" style="background: var(--surface); border: 1px solid var(--border); color: var(--text-main); padding: 4px 8px; border-radius: 4px; cursor: pointer; font-size: 11px;" title="Download Excel">XLSX</button>
+                <div style="display: flex; gap: 6px; flex-shrink: 0;">
+                    <button class="btn-hist-csv" data-id="${run.id}" style="background: var(--surface); border: 1px solid #3b82f6; color: #3b82f6; padding: 4px 8px; border-radius: 4px; cursor: pointer; font-size: 11px;" title="Download CSV">📊 CSV</button>
+                    <button class="btn-hist-excel" data-id="${run.id}" style="background: var(--surface); border: 1px solid #10b981; color: #10b981; padding: 4px 8px; border-radius: 4px; cursor: pointer; font-size: 11px;" title="Download Excel">📗 XLSX</button>
                 </div>
             `;
             list.appendChild(item);
         });
 
-        // Attach Export Listeners for History items
+        // Attach Export Listeners
         document.querySelectorAll('.btn-hist-csv').forEach(btn => {
             btn.addEventListener('click', (e) => exportHistoryItem(e.target.dataset.id, 'csv'));
         });
         document.querySelectorAll('.btn-hist-excel').forEach(btn => {
             btn.addEventListener('click', (e) => exportHistoryItem(e.target.dataset.id, 'xlsx'));
         });
+
+        // Attach Checkbox Listeners for Bulk UI
+        const checkboxes = document.querySelectorAll('.hist-checkbox');
+        checkboxes.forEach(cb => {
+            cb.addEventListener('change', () => {
+                const checkedCount = document.querySelectorAll('.hist-checkbox:checked').length;
+                selectAllCb.checked = (checkedCount === checkboxes.length);
+                btnDeleteSelected.style.display = checkedCount > 0 ? 'block' : 'none';
+            });
+        });
     });
 }
+
+// Bulk Delete Listeners
+document.getElementById('hist-select-all')?.addEventListener('change', (e) => {
+    const isChecked = e.target.checked;
+    document.querySelectorAll('.hist-checkbox').forEach(cb => cb.checked = isChecked);
+    document.getElementById('btn-delete-selected-history').style.display = isChecked ? 'block' : 'none';
+});
+
+document.getElementById('btn-delete-selected-history')?.addEventListener('click', () => {
+    const checkedBoxes = document.querySelectorAll('.hist-checkbox:checked');
+    if (checkedBoxes.length === 0) return;
+
+    if (confirm(`Are you sure you want to delete these ${checkedBoxes.length} runs?`)) {
+        const idsToDelete = Array.from(checkedBoxes).map(cb => cb.dataset.id);
+
+        chrome.storage.local.get(['runHistory'], (res) => {
+            let history = res.runHistory || [];
+            history = history.filter(run => !idsToDelete.includes(run.id.toString()));
+
+            chrome.storage.local.set({ runHistory: history }, () => {
+                renderRunHistory();
+                showToast(`Deleted ${idsToDelete.length} runs.`, "success");
+            });
+        });
+    }
+});
 
 function exportHistoryItem(runId, type) {
     chrome.storage.local.get(['runHistory'], (res) => {

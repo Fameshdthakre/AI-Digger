@@ -39,6 +39,22 @@ function updateActionSubtitle() {
     subtitle.innerText = actions.length > 0 ? `${actions.length} action(s)` : 'None';
 }
 
+function updateContainerSubtitle() {
+    const subtitle = document.getElementById('subtitle-container');
+    if (!subtitle) return;
+    const containerSel = document.getElementById('item-container-selector').value;
+    const maxItems = document.getElementById('max-items').value;
+
+    if (containerSel.trim() !== '') {
+        const count = parseInt(maxItems) || 0;
+        subtitle.innerText = count > 0 ? `Active (Max ${count})` : 'Active (All)';
+        subtitle.style.color = '#10b981'; // Green indicator
+    } else {
+        subtitle.innerText = 'None';
+        subtitle.style.color = '';
+    }
+}
+
 function updatePaginationSubtitle() {
     const subtitle = document.getElementById('subtitle-pagination');
     if (!subtitle) return;
@@ -88,6 +104,9 @@ document.getElementById('schedule-interval').addEventListener('change', updateSc
 document.getElementById('enable-stealth-mode').addEventListener('change', updateAntiBotSubtitle);
 document.getElementById('min-delay').addEventListener('input', updateAntiBotSubtitle);
 document.getElementById('max-delay').addEventListener('input', updateAntiBotSubtitle);
+
+document.getElementById('item-container-selector').addEventListener('input', updateContainerSubtitle);
+document.getElementById('max-items').addEventListener('input', updateContainerSubtitle);
 
 // Create observer for actions container to update subtitle when actions are added/removed
 const actionsObserver = new MutationObserver(updateActionSubtitle);
@@ -144,6 +163,8 @@ const outputFormatSelect = document.getElementById('output-format');
 
 function updateUISafeguards() {
     const hasContainer = containerInput.value.trim() !== '';
+
+    updateContainerSubtitle();
 
     // Toggle Output Format visibility
     if (outputFormatSelect.parentElement) {
@@ -606,10 +627,10 @@ document.querySelectorAll('.toggle-vis').forEach(btn => {
         const input = document.getElementById(targetId);
         if (input.type === 'password') {
             input.type = 'text';
-            e.currentTarget.innerText = '🙈';
+            e.currentTarget.innerText = '👁️'; // Open eye: password is now visible
         } else {
             input.type = 'password';
-            e.currentTarget.innerText = '👁️';
+            e.currentTarget.innerText = '🙈'; // Closed eye: password is now hidden
         }
     });
 });
