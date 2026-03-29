@@ -419,6 +419,15 @@
                 <div id="job-logs" style="flex: 1; overflow-y: auto; background: #f3f4f6; padding: 8px; border-radius: 4px; font-family: monospace; font-size: 11px; color: #374151; white-space: pre-wrap; border: 1px solid var(--border);"></div>
             </div>
 
+            <div class="card mt-4">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
+                    <h3 style="margin: 0; font-size: 14px;">Past Job Runs</h3>
+                    <button id="btn-clear-history" style="background: transparent; border: 1px solid var(--border); color: var(--text-muted); padding: 4px 8px; border-radius: 4px; font-size: 11px; cursor: pointer;">Clear History</button>
+                </div>
+                <div id="run-history-list" style="max-height: 250px; overflow-y: auto; display: flex; flex-direction: column; gap: 8px;">
+                </div>
+            </div>
+
             <div class="card">
                 <button id="btn-stop" class="btn btn-danger mb-4" style="display: none;">⏹ Stop Running Job</button>
                 <label>Export Data</label>

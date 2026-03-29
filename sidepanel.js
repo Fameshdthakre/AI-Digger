@@ -1585,6 +1585,100 @@ document.getElementById('btn-clear').addEventListener('click', () => {
     }
 });
 
+function renderRunHistory() {
+    chrome.storage.local.get(['runHistory'], (res) => {
+        const list = document.getElementById('run-history-list');
+        const history = res.runHistory || [];
+
+        if (history.length === 0) {
+            list.innerHTML = '<div style="color: var(--text-muted); font-size: 12px; text-align: center; padding: 10px;">No past runs found.</div>';
+            return;
+        }
+
+        list.innerHTML = '';
+        history.forEach(run => {
+            const item = document.createElement('div');
+            item.style.cssText = 'padding: 10px; border: 1px solid var(--border); border-radius: 6px; background: var(--bg); display: flex; justify-content: space-between; align-items: center;';
+
+            item.innerHTML = `
+                <div>
+                    <div style="font-weight: bold; font-size: 13px; color: var(--text);">${run.jobName}</div>
+                    <div style="font-size: 11px; color: var(--text-muted); margin-top: 4px;">${run.date} • ${run.count} rows</div>
+                </div>
+                <div style="display: flex; gap: 6px;">
+                    <button class="btn-hist-csv" data-id="${run.id}" style="background: var(--surface); border: 1px solid var(--border); padding: 4px 8px; border-radius: 4px; cursor: pointer; font-size: 11px;" title="Download CSV">CSV</button>
+                    <button class="btn-hist-excel" data-id="${run.id}" style="background: var(--surface); border: 1px solid var(--border); padding: 4px 8px; border-radius: 4px; cursor: pointer; font-size: 11px;" title="Download Excel">XLSX</button>
+                </div>
+            `;
+            list.appendChild(item);
+        });
+
+        // Attach Export Listeners for History items
+        document.querySelectorAll('.btn-hist-csv').forEach(btn => {
+            btn.addEventListener('click', (e) => exportHistoryItem(e.target.dataset.id, 'csv'));
+        });
+        document.querySelectorAll('.btn-hist-excel').forEach(btn => {
+            btn.addEventListener('click', (e) => exportHistoryItem(e.target.dataset.id, 'xlsx'));
+        });
+    });
+}
+
+function exportHistoryItem(runId, type) {
+    chrome.storage.local.get(['runHistory'], (res) => {
+        const history = res.runHistory || [];
+        const run = history.find(r => r.id.toString() === runId);
+        if (!run || !run.data || run.data.length === 0) {
+            showToast("Data not found for this run.", "error");
+            return;
+        }
+
+        const cleanData = sanitizeDataForExport(run.data);
+        const filename = `${run.jobName.replace(/[^a-z0-9]/gi, '_')}_${run.id}.${type}`;
+
+        if (type === 'csv') {
+            const headerSet = new Set();
+            cleanData.forEach(row => Object.keys(row).forEach(k => headerSet.add(k)));
+            const headers = Array.from(headerSet);
+            const csvRows = [headers.map(h => `"${String(h).replace(/"/g, '""')}"`).join(',')];
+
+            for (const row of cleanData) {
+                csvRows.push(headers.map(h => `"${String(row[h] || "").replace(/"/g, '""')}"`).join(','));
+            }
+
+            const blob = new Blob([new Uint8Array([0xEF, 0xBB, 0xBF]), csvRows.join('\n')], { type: 'text/csv;charset=utf-8;' });
+            triggerDownload(blob, filename);
+        } else {
+            const worksheet = XLSX.utils.json_to_sheet(cleanData);
+            const workbook = XLSX.utils.book_new();
+            XLSX.utils.book_append_sheet(workbook, worksheet, "Data");
+            const excelBuffer = XLSX.write(workbook, { bookType: 'xlsx', type: 'array' });
+            const blob = new Blob([excelBuffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+            triggerDownload(blob, filename);
+        }
+    });
+}
+
+function triggerDownload(blob, filename) {
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.style.display = 'none';
+    a.href = url;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    setTimeout(() => { document.body.removeChild(a); URL.revokeObjectURL(url); }, 100);
+}
+
+document.getElementById('btn-clear-history').addEventListener('click', () => {
+    if (confirm("Are you sure you want to delete all past job runs?")) {
+        chrome.storage.local.remove('runHistory', () => {
+            renderRunHistory();
+            showToast("History cleared.");
+        });
+    }
+});
+
 // Initial status poll
 updateStatus();
+renderRunHistory();
 setInterval(updateStatus, 2000); // Poll every 2 seconds to update count live
