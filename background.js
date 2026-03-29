@@ -1,3 +1,5 @@
+importScripts('js/prompts.js');
+
 /**
  * background.js
  * The "Brain" of the extension. Manages the queue of URLs, applies randomized delays,
@@ -32,7 +34,8 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     } else if (message.action === 'STOP_JOB') {
         archiveCurrentRun();
         isRunning = false;
-        chrome.alarms.clear("nextJobStep");
+        currentJob = null;
+        chrome.alarms.clearAll(); // Nuke all pending alarms immediately
         chrome.storage.local.remove('jobState');
         addLog("Job stopped by user.");
         sendResponse({ status: 'stopped' });
@@ -72,6 +75,48 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
             chrome.runtime.sendMessage({ action: 'MAGIC_BUILD_RESULT', error: err.message });
         });
         sendResponse({ status: 'building' });
+    } else if (message.action === 'PROCESS_AI_INSPECTOR') {
+        chrome.storage.sync.get(['aiSettings'], (res) => {
+            const settings = res.aiSettings;
+            const hasApiKey = settings && settings.aiPlatform && (
+                (settings.aiPlatform === 'openai' && settings.openai?.key) ||
+                (settings.aiPlatform === 'gemini' && settings.gemini?.key) ||
+                (settings.aiPlatform === 'claude' && settings.claude?.key)
+            );
+
+            if (!hasApiKey) {
+                chrome.runtime.sendMessage({ action: 'INSPECTOR_RESULT', fieldId: message.fieldId, selector: message.fallbackSelector });
+                return;
+            }
+
+            const promptTemplate = message.isContainer ? PROMPTS.AI_INSPECTOR_CONTAINER : PROMPTS.AI_INSPECTOR;
+            const prompt = `${promptTemplate}\n\nHTML Snippet:\n"""\n${message.htmlSnippet}\n"""`;
+
+            generateSelectorWithAI(prompt).then(selector => {
+                chrome.runtime.sendMessage({ action: 'AI_SELECTOR_RESULT', fieldId: message.fieldId, selector: selector });
+            }).catch(err => {
+                chrome.runtime.sendMessage({ action: 'INSPECTOR_RESULT', fieldId: message.fieldId, selector: message.fallbackSelector });
+            });
+        });
+        sendResponse({ status: 'processing' });
+    } else if (message.action === 'PROCESS_AI_WAND') {
+        const truncatedHtml = message.html.substring(0, 15000);
+        const prompt = `${PROMPTS.AI_WAND}\n\nUser Request: "${message.query}"\n\nPage HTML:\n"""\n${truncatedHtml}\n"""`;
+        generateSelectorWithAI(prompt).then(selector => {
+            chrome.runtime.sendMessage({ action: 'AI_SELECTOR_RESULT', fieldId: message.fieldId, selector: selector });
+        }).catch(err => {
+            chrome.runtime.sendMessage({ action: 'AI_SELECTOR_ERROR', fieldId: message.fieldId, error: err.message });
+        });
+        sendResponse({ status: 'processing' });
+    } else if (message.action === 'PROCESS_AI_PARENT_WAND') {
+        const truncatedHtml = message.html.substring(0, 15000);
+        const prompt = `${PROMPTS.AI_PARENT_WAND}\n\nUser Request: "${message.query}"\n\nPage HTML:\n"""\n${truncatedHtml}\n"""`;
+        generateSelectorWithAI(prompt).then(selector => {
+            chrome.runtime.sendMessage({ action: 'AI_SELECTOR_RESULT', fieldId: message.fieldId, selector: selector });
+        }).catch(err => {
+            chrome.runtime.sendMessage({ action: 'AI_SELECTOR_ERROR', fieldId: message.fieldId, error: err.message });
+        });
+        sendResponse({ status: 'processing' });
     }
     return true; // Keep message channel open for async responses
 });
@@ -247,6 +292,7 @@ async function processNextStep() {
             } else if (blueprint.scrapingType === 'single-page' && state.currentPage > state.maxPages) {
                 completeJob();
             } else {
+                if (!isRunning) return;
                 chrome.alarms.create("nextJobStep", { when: Date.now() + 60000 });
                 setTimeout(processNextStep, 1000);
             }
@@ -271,6 +317,7 @@ async function processNextStep() {
             }
 
             let detailData = await scrapeTab(tab.id, state.detailBlueprint, detailUrl);
+            if (!isRunning) return; // Kill switch: user pressed stop during the scrape
 
             // Merge Data
             if (detailData) {
@@ -328,6 +375,7 @@ async function processNextStep() {
             state.deepCrawlIndex++;
             await chrome.storage.local.set({ jobState: state });
 
+            if (!isRunning) return;
             chrome.alarms.create("nextJobStep", { when: Date.now() + 60000 });
             setTimeout(processNextStep, delayMs);
 
@@ -340,6 +388,7 @@ async function processNextStep() {
 
             state.deepCrawlIndex++;
             await chrome.storage.local.set({ jobState: state });
+            if (!isRunning) return;
             chrome.alarms.create("nextJobStep", { when: Date.now() + 60000 });
             setTimeout(processNextStep, 1000);
         }
@@ -376,6 +425,7 @@ async function processNextStep() {
             }
 
             let extractedData = await scrapeTab(tab.id, blueprint, url);
+            if (!isRunning) return; // Kill switch: user pressed stop during the scrape
             if (extractedData) {
                 // If Deep Crawl is enabled, route data to queue instead of saving
                 if (blueprint.linkedDetailJob && state.detailBlueprint) {
@@ -402,10 +452,12 @@ async function processNextStep() {
                  addLog(`Master job batch done. Switching to Deep Crawl for ${state.deepCrawlQueue.length} items...`);
                  state.isDeepCrawling = true;
                  await chrome.storage.local.set({ jobState: state });
+                 if (!isRunning) return;
                  chrome.alarms.create("nextJobStep", { when: Date.now() + 60000 });
                  setTimeout(processNextStep, delayMs);
             } else if (state.currentIndex < state.urlsToScrape.length) {
                 addLog(`Waiting ${delayMs}ms before next URL...`);
+                if (!isRunning) return;
                 chrome.alarms.create("nextJobStep", { when: Date.now() + 60000 });
                 setTimeout(processNextStep, delayMs);
             } else {
@@ -416,6 +468,7 @@ async function processNextStep() {
             addLog(`ERROR: Failed to load or scrape ${url}: ${error.message}`);
             state.currentIndex++;
             await chrome.storage.local.set({ jobState: state });
+            if (!isRunning) return;
             chrome.alarms.create("nextJobStep", { when: Date.now() + 60000 }); // 1 min fallback wake up
             setTimeout(processNextStep, 1000); // Retry next quickly
         }
@@ -462,6 +515,7 @@ async function processNextStep() {
 
             let [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
             let extractedData = await scrapeTab(tabId, blueprint, tab.url);
+            if (!isRunning) return; // Kill switch: user pressed stop during the scrape
             if (extractedData) {
                 if (blueprint.linkedDetailJob && state.detailBlueprint) {
                     enqueueForDeepCrawl(extractedData, state, tab.url, `Single_Page-${state.currentPage}`);
@@ -510,6 +564,7 @@ async function processNextStep() {
                  addLog(`Master page scraped. Switching to Deep Crawl for ${state.deepCrawlQueue.length} items before continuing...`);
                  state.isDeepCrawling = true;
                  await chrome.storage.local.set({ jobState: state });
+                 if (!isRunning) return;
                  chrome.alarms.create("nextJobStep", { when: Date.now() + 60000 });
                  setTimeout(processNextStep, 1000);
                  return; // Exit here, processNextStep will handle resuming master later
@@ -517,6 +572,7 @@ async function processNextStep() {
 
             if (hasNextPage) {
                 addLog(`Waiting ${delayMs}ms before next page...`);
+                if (!isRunning) return;
                 chrome.alarms.create("nextJobStep", { when: Date.now() + 60000 }); // 1 min fallback wake up
                 setTimeout(processNextStep, delayMs + 2000);
             } else {
@@ -541,7 +597,14 @@ async function ensureScriptInjected(tabId) {
     try {
         await chrome.scripting.executeScript({
             target: { tabId: tabId },
-            files: ['turndown.js', 'content.js']
+            files: [
+                'turndown.js',
+                'js/content/inspector.js',
+                'js/content/macros.js',
+                'js/content/auto-detect.js',
+                'js/content/extractor.js',
+                'js/content/main.js'
+            ]
         });
     } catch (err) {
         addLog(`Note: content script inject err (may already exist)`);
@@ -574,12 +637,15 @@ async function scrapeTab(tabId, job, url) {
         return null;
     });
 
+    if (!isRunning) return null; // Kill Switch 1
+
     if (extractedData && extractedData._pageMarkdown) {
         // Handle Self-Healing first
         if (extractedData._failedFields && extractedData._failedFields.length > 0) {
             addLog(`Attempting self-healing for ${extractedData._failedFields.length} failed fields...`);
             try {
                 const healedData = await processSelfHealing(tabId, job, extractedData._failedFields, extractedData._pageMarkdown);
+                if (!isRunning) return null; // Kill Switch 2
                 extractedData = { ...extractedData, ...healedData.recoveredValues };
 
                 // Update job blueprint locally
@@ -627,6 +693,7 @@ async function scrapeTab(tabId, job, url) {
             addLog("Processing AI extraction...");
             try {
                 const aiExtracted = await processAIExtraction(job, extractedData._pageMarkdown);
+                if (!isRunning) return null; // Kill Switch 3
 
                 // Merge AI items with deterministic items
                 if (aiExtracted.items && Array.isArray(aiExtracted.items)) {
@@ -776,6 +843,8 @@ function saveExtractedData(data, url, pageIndex) {
         triggerWebhook(currentJob?.webhookUrl, row);
     });
 
+    postToWebhook(currentJob.webhookUrl, rowsToSave, currentJob.jobName);
+
     chrome.storage.local.set({ scrapedData: scrapedData });
 }
 
@@ -792,6 +861,19 @@ function triggerWebhook(url, data) {
     });
 }
 
+async function postToWebhook(webhookUrl, dataPayload, jobName) {
+    if (!webhookUrl || webhookUrl.trim() === '') return;
+    try {
+        await fetch(webhookUrl, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ job: jobName, timestamp: new Date().toISOString(), data: dataPayload })
+        });
+    } catch (error) {
+        console.error("AI-Digger: Webhook POST failed", error);
+    }
+}
+
 // Helper: AI Extraction Caller
 async function processAIExtraction(blueprint, text) {
     const settingsObj = await chrome.storage.sync.get(['aiSettings']);
@@ -805,10 +887,7 @@ async function processAIExtraction(blueprint, text) {
     if (aiFields.length === 0) return {};
 
     // Build the prompt
-    let prompt = "You are an expert data extraction agent. Extract the requested fields from the source Markdown.\n";
-    prompt += "Each item must represent a discrete row/card/product found in the text. ";
-    prompt += "If a field is missing, return null.\n\n";
-    prompt += "Fields to extract:\n";
+    let prompt = PROMPTS.EXTRACTION;
     aiFields.forEach(f => {
         prompt += `- "${f.name}": ${f.selector}\n`;
     });
@@ -945,11 +1024,7 @@ async function processSelfHealing(tabId, job, failedFields, markdown) {
         throw new Error("AI Platform not configured for self-healing.");
     }
 
-    let basePrompt = "You are an expert web scraper recovery agent.\n";
-    basePrompt += "The following data fields failed to match any elements on the page using their current CSS/XPath selectors.\n";
-    basePrompt += "Given the page Markdown below, find the missing values for these fields, AND deduce a highly resilient, semantic CSS selector for them.\n";
-    basePrompt += "Prioritize attributes like data-testid, aria-label, or semantic class names over structural paths.\n\n";
-    basePrompt += "Failed Fields:\n";
+    let basePrompt = PROMPTS.SELF_HEALING;
     failedFields.forEach(f => {
         basePrompt += `- Name: "${f.name}", Old Selector: "${f.selector}"\n`;
     });
@@ -1125,9 +1200,7 @@ async function analyzePageWithAI(text) {
         throw new Error("AI Platform not configured in settings. Please setup your API keys in the Settings tab.");
     }
 
-    const systemPrompt = `You are an expert web scraping architect. Analyze the provided webpage text content.
-Determine the page archetype (e.g., E-commerce grid, Vendor Listing, Article) and identify the optimal data fields a user would want to extract.
-For each field, write a clear, precise AI extraction prompt (e.g., "What is the price of the item?").`;
+    const systemPrompt = PROMPTS.ANALYZE_PAGE;
 
     const truncatedText = text.substring(0, 20000);
     const prompt = `${systemPrompt}\n\nWebpage Text:\n"""\n${truncatedText}\n"""`;
@@ -1255,29 +1328,7 @@ async function generateBlueprintWithAI(userPrompt, text) {
         throw new Error("AI Platform not configured in settings. Please setup your API keys in the Settings tab.");
     }
 
-        const systemPrompt = `You are an expert web scraper architect.
-I will provide you with a user request and a pruned HTML snippet of the target webpage.
-
-Your job is to generate a JSON blueprint to scrape this data.
-CRITICAL: You MUST analyze the provided HTML snippet. Generate EXACT CSS selectors using the classes, IDs, and data-* attributes present in the HTML. Do not hallucinate generic selectors. If a field asks for a link, use extractType "href". If it asks for an image, use "src".
-
-Output ONLY a valid JSON object matching this exact schema:
-{
-    "jobName": "Descriptive Name",
-    "scrapingType": "single-page" | "multi-url",
-    "outputFormat": "flat" | "grouped",
-    "containerSelector": "CSS selector for the repeating item box (if applicable, else empty)",
-    "fields": [
-        {
-            "name": "Field Name",
-            "selector": "Exact CSS Selector derived from HTML",
-            "type": "css",
-            "extractType": "text" | "href" | "src" | "attribute",
-            "attributeName": "If extractType is attribute, put name here",
-            "multiple": false
-        }
-    ]
-}`;
+    const systemPrompt = PROMPTS.MAGIC_BUILD;
 
     const truncatedText = text.substring(0, 20000);
     const prompt = `${systemPrompt}\n\nUser Request:\n"${userPrompt}"\n\nWebpage HTML:\n"""\n${truncatedText}\n"""`;
@@ -1506,4 +1557,45 @@ async function archiveCurrentRun() {
     if (history.length > 50) history.pop(); // Keep only the last 50 runs
 
     await chrome.storage.local.set({ runHistory: history });
+}
+
+async function generateSelectorWithAI(fullPrompt) {
+    const settingsObj = await chrome.storage.sync.get(['aiSettings']);
+    const settings = settingsObj.aiSettings;
+
+    if (!settings || !settings.aiPlatform) throw new Error("AI Platform not configured.");
+
+    let resultStr = "";
+
+    if (settings.aiPlatform === 'openai') {
+        const response = await fetch('https://api.openai.com/v1/chat/completions', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${settings.openai.key}` },
+            body: JSON.stringify({ model: settings.openai.model || 'gpt-4o', messages: [{ role: "user", content: fullPrompt }], temperature: 0.1 })
+        });
+        if (!response.ok) throw new Error(response.statusText);
+        const data = await response.json();
+        resultStr = data.choices[0].message.content;
+    } else if (settings.aiPlatform === 'gemini') {
+        const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${settings.gemini.model || 'gemini-2.5-flash'}:generateContent?key=${settings.gemini.key}`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ contents: [{ parts: [{ text: fullPrompt }] }] })
+        });
+        if (!response.ok) throw new Error(response.statusText);
+        const data = await response.json();
+        resultStr = data.candidates[0].content.parts[0].text;
+    } else if (settings.aiPlatform === 'claude') {
+        const response = await fetch('https://api.anthropic.com/v1/messages', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'x-api-key': settings.claude.key, 'anthropic-version': '2023-06-01' },
+            body: JSON.stringify({ model: settings.claude.model || 'claude-3-5-sonnet-20241022', max_tokens: 100, messages: [{ role: "user", content: fullPrompt }] })
+        });
+        if (!response.ok) throw new Error(response.statusText);
+        const data = await response.json();
+        resultStr = data.content[0].text;
+    }
+
+    // Clean markdown fences if AI ignores instructions
+    return resultStr.replace(/^```css/i, '').replace(/^```/i, '').replace(/```$/, '').trim();
 }

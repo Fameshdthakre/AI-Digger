@@ -4,171 +4,22 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Universal Scraper</title>
-    <style>
-        /* Minimalist Modern UI - No external CSS required */
-        :root {
-            --bg: #f9fafb; --surface: #ffffff; --primary: #3b82f6; --primary-hover: #2563eb;
-            --text-main: #111827; --text-muted: #6b7280; --border: #e5e7eb; --danger: #ef4444;
-            --field-bg: #f9fafb; --preview-bg: #f3f4f6; --preview-text: #374151;
-            --magic-bg: #fdf4ff; --magic-border: #e879f9; --magic-text: #c026d3;
-            --profile-bg: #eff6ff; --profile-border: #bfdbfe;
-            --footer-bg: rgba(255, 255, 255, 0.85);
-        }
-
-        @media (prefers-color-scheme: dark) {
-            :root {
-                --bg: #0f172a; --surface: #1e293b; --primary: #3b82f6; --primary-hover: #60a5fa;
-                --text-main: #f8fafc; --text-muted: #94a3b8; --border: #334155; --danger: #f87171;
-                --field-bg: #0f172a; --preview-bg: #0f172a; --preview-text: #cbd5e1;
-                --magic-bg: #2d1b4e; --magic-border: #86198f; --magic-text: #e879f9;
-                --profile-bg: #1e3a8a; --profile-border: #1d4ed8;
-                --footer-bg: rgba(30, 41, 59, 0.85);
-            }
-            input, select, textarea { background-color: var(--surface); color: var(--text-main); color-scheme: dark; }
-            .btn-outline { color: var(--text-main); border-color: var(--border); }
-            .btn-outline:hover { background-color: var(--border); }
-            .inspect-btn, .test-btn, .remove-field { background-color: var(--surface); color: var(--text-main); border-color: var(--border); }
-            .btn-danger { background-color: #7f1d1d; color: #fca5a5; }
-            .remove-field:hover { background-color: #7f1d1d; border-color: #f87171; color: #fca5a5; }
-        }
-
-        body { font-family: system-ui, -apple-system, sans-serif; background: var(--bg); color: var(--text-main); width: 100%; height: 100vh; margin: 0; padding: 0; display: flex; flex-direction: column; }
-        header { background: var(--surface); padding: 16px 20px; border-bottom: 1px solid var(--border); display: flex; justify-content: space-between; align-items: center; flex-shrink: 0; }
-        h1 { margin: 0; font-size: 18px; font-weight: 700; color: var(--primary); }
-        .tabs { display: flex; border-bottom: 1px solid var(--border); background: var(--surface); flex-shrink: 0; }
-        .tab { flex: 1; padding: 12px; text-align: center; font-size: 14px; font-weight: 600; cursor: pointer; color: var(--text-muted); border-bottom: 2px solid transparent; }
-        .tab.active { color: var(--primary); border-bottom-color: var(--primary); }
-        
-        .container { padding: 20px; flex-grow: 1; overflow-y: auto; }
-        .view { display: none; }
-        .view.active { display: block; }
-        
-        .card { background: var(--surface); padding: 16px; border-radius: 8px; border: 1px solid var(--border); margin-bottom: 16px; box-shadow: 0 1px 2px rgba(0,0,0,0.05); }
-        .form-group { margin-bottom: 12px; }
-        label { display: block; font-size: 12px; font-weight: 600; color: var(--text-muted); margin-bottom: 4px; }
-        input, select, textarea { width: 100%; box-sizing: border-box; padding: 8px 12px; border: 1px solid var(--border); border-radius: 6px; font-size: 14px; outline: none; transition: border 0.2s; }
-        input:focus, select:focus, textarea:focus { border-color: var(--primary); }
-        textarea { resize: vertical; min-height: 60px; font-family: monospace; font-size: 12px;}
-        
-        .btn { display: inline-block; width: 100%; padding: 10px; font-size: 14px; font-weight: 600; text-align: center; border: none; border-radius: 6px; cursor: pointer; transition: background 0.2s; box-sizing: border-box; }
-        .btn-primary { background: var(--primary); color: white; }
-        .btn-primary:hover { background: var(--primary-hover); }
-        .btn-outline { background: transparent; border: 1px solid var(--border); color: var(--text-main); }
-        .btn-outline:hover { background: var(--bg); }
-        .btn-danger { background: #fee2e2; color: var(--danger); }
-        
-        .field-row { display: flex; flex-direction: column; gap: 8px; margin-bottom: 12px; padding: 12px; background: var(--field-bg); border: 1px solid var(--border); border-radius: 6px; }
-        .field-row input, .field-row select { margin-bottom: 0; }
-        .field-row-top, .field-row-bottom { display: flex; gap: 8px; align-items: center; }
-        .remove-field { background: var(--surface); border: 1px solid var(--border); color: var(--danger); cursor: pointer; font-size: 14px; padding: 6px; border-radius: 4px; display: flex; align-items: center; justify-content: center;}
-        .remove-field:hover { background: #fee2e2; border-color: #fca5a5; }
-        .inspect-btn { background: var(--surface); border: 1px solid var(--border); cursor: pointer; padding: 6px 10px; border-radius: 4px; font-size: 14px; display: flex; align-items: center; justify-content: center; }
-        .inspect-btn:hover { border-color: var(--primary); color: var(--primary); }
-        .test-btn { background: var(--surface); border: 1px solid var(--border); cursor: pointer; padding: 6px 10px; border-radius: 4px; font-size: 14px; display: flex; align-items: center; justify-content: center; }
-        .test-btn:hover { border-color: #10b981; color: #10b981; }
-        .preview-box { background: var(--preview-bg); border: 1px dashed var(--border); padding: 8px; border-radius: 4px; font-family: monospace; font-size: 11px; color: var(--preview-text); max-height: 80px; overflow-y: auto; white-space: pre-wrap; display: none; }
-        .checkbox-label { display: flex; align-items: center; gap: 4px; font-size: 11px; font-weight: normal; cursor: pointer; color: var(--text-muted); }
-        .checkbox-label input { width: auto; margin: 0; }
-        
-        /* Settings UI */
-        .password-group { display: flex; align-items: stretch; margin-bottom: 12px; }
-        .password-group input { border-radius: 6px 0 0 6px; border-right: none; margin-bottom: 0; }
-        .password-group button { border-radius: 0 6px 6px 0; border: 1px solid var(--border); background: var(--bg); color: var(--text-muted); cursor: pointer; padding: 0 12px; font-size: 14px; }
-        .provider-card { border-left: 3px solid var(--border); padding-left: 12px; margin-bottom: 16px; }
-        .provider-card.active-provider { border-left-color: var(--primary); }
-
-        /* Utility */
-        .flex { display: flex; gap: 12px; }
-        .flex-1 { flex: 1; }
-        .mt-2 { margin-top: 8px; }
-        .mt-4 { margin-top: 16px; }
-        .mb-4 { margin-bottom: 16px; }
-        
-        /* Stats */
-        .stat-box { text-align: center; padding: 20px; background: var(--surface); border-radius: 8px; border: 1px solid var(--border); }
-        .stat-number { font-size: 32px; font-weight: 800; color: var(--primary); }
-
-        /* Accordions */
-        details.card > summary {
-            list-style: none; /* Hide default arrow */
-            cursor: pointer;
-            margin: -16px;
-            padding: 16px;
-            display: flex;
-            align-items: center;
-        }
-        details.card > summary::-webkit-details-marker { display: none; } /* Safari */
-        details.card > summary::before {
-            content: '▶';
-            font-size: 10px;
-            display: inline-block;
-            margin-right: 8px;
-            transition: transform 0.2s ease-in-out;
-            color: var(--text-muted);
-        }
-        details.card[open] > summary {
-            border-bottom: 1px solid var(--border);
-            margin-bottom: 16px;
-        }
-        details.card[open] > summary::before {
-            transform: rotate(90deg);
-        }
-        .summary-title { color: var(--primary); font-size: 12px; font-weight: 600; }
-        .summary-subtitle { font-size: 11px; color: var(--text-muted); margin-left: 8px; font-weight: normal; }
-
-        /* Sticky Action Footer */
-        .sticky-footer {
-            position: sticky;
-            bottom: 0;
-            left: 0;
-            width: 100%;
-            padding: 16px 20px;
-            background: var(--footer-bg);
-            backdrop-filter: blur(8px);
-            border-top: 1px solid var(--border);
-            box-sizing: border-box;
-            display: flex;
-            gap: 12px;
-            z-index: 10;
-        }
-
-        /* Toasts */
-        #toast-container {
-            position: fixed;
-            bottom: 80px;
-            right: 20px;
-            display: flex;
-            flex-direction: column;
-            gap: 8px;
-            z-index: 9999;
-            pointer-events: none;
-        }
-        .toast {
-            background: var(--surface);
-            color: var(--text-main);
-            border: 1px solid var(--border);
-            border-left: 4px solid var(--primary);
-            padding: 12px 16px;
-            border-radius: 6px;
-            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
-            font-size: 13px;
-            font-weight: 500;
-            opacity: 0;
-            transform: translateX(100%);
-            transition: opacity 0.3s, transform 0.3s;
-            pointer-events: auto;
-        }
-        .toast.show { opacity: 1; transform: translateX(0); }
-        .toast.success { border-left-color: #10b981; }
-        .toast.error { border-left-color: #ef4444; }
-        .toast.info { border-left-color: #3b82f6; }
-    </style>
+    <link rel="stylesheet" href="css/sidepanel.css">
+    <style>@keyframes pulse { 0% { opacity: 1; } 50% { opacity: 0.4; } 100% { opacity: 1; } }</style>
 </head>
 <body>
 
-    <header>
-        <h1>AI Digger</h1>
-        <span style="font-size: 12px; color: var(--text-muted);">Smart Web Scraper</span>
+    <header class="header-container" style="display: flex; flex-direction: row; justify-content: space-between; align-items: flex-start; margin-bottom: 16px; box-sizing: border-box;">
+        <div style="display: flex; flex-direction: column;">
+            <div class="header-title-row">
+                <h1>AI Digger</h1>
+                <span class="badge" id="app-version-badge">v1.0.0</span>
+            </div>
+            <span style="font-size: 12px; color: var(--text-muted); font-weight: 500;">Smart Web Scraper</span>
+        </div>
+        <button id="btn-feedback" class="btn" style="background: transparent; border: 1px solid var(--border); color: var(--text-main); font-size: 11px; padding: 4px 8px; border-radius: 4px; display: flex; align-items: center; gap: 4px; width: auto; align-self: center;">
+            💬 Feedback
+        </button>
     </header>
 
     <div class="tabs">
@@ -181,11 +32,11 @@
         
         <!-- BUILD VIEW -->
         <div id="view-build" class="view active">
-            <div class="card" style="background: #fdf4ff; border-color: #e879f9;">
-                <label style="color: #c026d3;">✨ Magic Build (Chat-to-Scrape)</label>
+            <div class="card" style="background: var(--magic-bg); border-color: var(--magic-border);">
+                <label style="color: var(--magic-text);">✨ Magic Build (Chat-to-Scrape)</label>
                 <div style="font-size: 11px; color: var(--text-muted); margin-bottom: 8px;">Describe what you want to extract and let AI build the entire scraper.</div>
                 <textarea id="nl-prompt" placeholder="e.g., Extract all product titles and prices, then click the next page button."></textarea>
-                <button id="btn-generate-blueprint" class="btn btn-primary" style="background-color: #c026d3; border-color: #c026d3; margin-top: 8px;">Generate Blueprint</button>
+                <button id="btn-generate-blueprint" class="btn btn-primary" style="background-color: var(--magic-text); border-color: var(--magic-text); margin-top: 8px;">Generate Blueprint</button>
             </div>
 
             <div class="card" style="background: var(--profile-bg); border-color: var(--profile-border);">
@@ -196,10 +47,13 @@
                     </select>
                 </div>
                 <div class="flex mt-2" style="justify-content: flex-end; gap: 4px;">
-                    <button id="btn-clone-job" class="btn btn-outline" style="width: auto; padding: 6px 10px; font-size: 12px; border-color: #3b82f6; color: #3b82f6;">Clone</button>
+                    <button id="btn-clone-job" class="btn btn-outline" style="width: auto; padding: 6px 10px; font-size: 12px; border-color: var(--primary); color: var(--primary);">Clone</button>
                     <button id="btn-export-job" class="btn btn-outline" style="width: auto; padding: 6px 10px; font-size: 12px;">Export</button>
                     <button id="btn-import-job" class="btn btn-outline" style="width: auto; padding: 6px 10px; font-size: 12px;">Import</button>
                     <button id="btn-delete-job" class="btn btn-danger" style="width: auto; padding: 6px 10px; font-size: 12px;">Delete</button>
+                </div>
+                <div style="text-align: center; margin-top: 16px; padding-top: 16px; border-top: 1px dashed var(--profile-border);">
+                    <button id="btn-save-job" class="btn btn-primary" style="width: 60%; background-color: var(--primary); border-color: var(--primary);">💾 Save Current Job</button>
                 </div>
             </div>
             <input type="file" id="import-file-input" accept=".json" style="display: none;" />
@@ -252,14 +106,21 @@
                 <div id="actions-container"></div>
                 <div style="display: flex; gap: 8px; margin-top: 8px;">
                     <button id="add-action" class="btn btn-outline" style="font-size: 12px; padding: 6px; flex: 1;">+ Add Action</button>
-                    <button id="btn-record-macro" class="btn btn-outline" style="font-size: 12px; padding: 6px; flex: 1; border-color: #ef4444; color: #ef4444;">🔴 Record Actions</button>
+                    <button id="btn-record-macro" class="btn btn-outline" style="font-size: 12px; padding: 6px; flex: 1; border-color: var(--danger); color: var(--danger);">🔴 Record Actions</button>
                 </div>
             </details>
 
-            <div class="card">
-                <label style="color: var(--primary);">Container-Child Scoped Extraction (Optional)</label>
+            <details class="card">
+                <summary>
+                    <span class="summary-title">Container-Child Scoped Extraction (Optional)</span>
+                    <span class="summary-subtitle" id="subtitle-container">None</span>
+                </summary>
                 <div style="font-size: 11px; color: var(--text-muted); margin-bottom: 8px;">If scraping a list/grid, enter the selector for the repeating item card. The data fields below will be extracted relative to this container.</div>
-                <div style="display: flex; gap: 8px;">
+                <div style="display: flex; gap: 8px;" id="item-container-selector-row">
+                    <div style="display: flex; flex-shrink: 0;">
+                        <button class="btn-wand inspect-btn" id="wand-item-container-btn" title="Describe to AI" style="flex-shrink: 0; padding: 4px 8px; font-size: 14px; background: transparent; border: 1px solid var(--border); border-radius: 4px; border-top-right-radius: 0; border-bottom-right-radius: 0; cursor: pointer; border-right: none;">🪄</button>
+                        <button class="btn-parent-wand" title="Find Parent Container with AI" style="flex-shrink: 0; padding: 4px 8px; font-size: 14px; background: transparent; border: 1px solid var(--border); border-radius: 4px; border-top-left-radius: 0; border-bottom-left-radius: 0; cursor: pointer; margin-right: 8px;">📦</button>
+                    </div>
                     <button class="inspect-btn" id="inspect-container-btn" title="Inspect Container" style="flex-shrink: 0;">🔍</button>
                     <button class="test-btn" id="test-container-btn" title="Test Container" style="flex-shrink: 0;">🧪</button>
                     <input type="text" id="item-container-selector" placeholder="CSS or XPath for repeating Item Container (e.g. .product-card)" style="margin-bottom: 0; flex: 1;" />
@@ -270,7 +131,7 @@
                     <span style="font-size: 11px; color: var(--text-muted); margin-left: 8px;">(Set to 0 to extract all)</span>
                 </div>
                 <div class="preview-box" id="container-preview-box" style="margin-top: 8px;"></div>
-            </div>
+            </details>
 
             <div class="card">
                 <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
@@ -295,6 +156,7 @@
                     <div style="flex: 2;">
                         <label>Pagination 'Next' Button</label>
                         <div style="display: flex; gap: 8px;">
+                            <button class="btn-wand inspect-btn" id="wand-next-button-btn" title="Describe to AI" style="padding: 0 8px; border-radius: 4px; font-size: 14px; background: transparent; border: 1px solid var(--border); cursor: pointer;">🪄</button>
                             <button class="inspect-btn" id="inspect-next-btn" title="Inspect Next Button" style="flex-shrink: 0;">🔍</button>
                             <button class="test-btn" id="test-next-btn" title="Test Next Button" style="flex-shrink: 0;">🧪</button>
                             <input type="text" id="next-button-selector" placeholder="CSS or XPath for Next button" style="flex: 1;" />
@@ -319,6 +181,7 @@
                         <input type="number" id="max-scrolls" value="5" min="1" style="width: 60px;" />
                     </div>
                     <div style="display: flex; gap: 8px; align-items: center;">
+                        <button class="btn-wand inspect-btn" id="wand-scroll-container-btn" title="Describe to AI" style="padding: 0 8px; border-radius: 4px; font-size: 14px; background: transparent; border: 1px solid var(--border); cursor: pointer;">🪄</button>
                         <button class="inspect-btn" id="inspect-scroll-container-btn" title="Inspect Scroll Container" style="flex-shrink: 0;">🔍</button>
                         <button class="test-btn" id="test-scroll-container-btn" title="Test Scroll Container" style="flex-shrink: 0;">🧪</button>
                         <input type="text" id="scroll-container-selector" placeholder="Target Scroll Box (Optional)" title="If the page has a specific scrolling box, enter its CSS selector here. Leave blank for whole page." style="flex: 1; margin-bottom: 0;" />
@@ -368,7 +231,7 @@
                 </div>
             </details>
 
-            <details class="card" style="margin-bottom: 80px;">
+            <details class="card" style="margin-bottom: 20px;">
                 <summary>
                     <span class="summary-title">Anti-Bot Settings (Delays)</span>
                     <span class="summary-subtitle" id="subtitle-antibot">Stealth Off, 2-5s</span>
@@ -378,12 +241,12 @@
                 </label>
                 <div class="flex mt-2">
                     <div class="flex-1">
-                        <label>Min Delay (ms)</label>
-                        <input type="number" id="min-delay" value="2000" />
+                        <label>Min Delay (sec)</label>
+                        <input type="number" id="min-delay" value="1" min="0.1" step="0.5" style="width: 70px;" /> <span style="font-size: 11px;">sec</span>
                     </div>
                     <div class="flex-1">
-                        <label>Max Delay (ms)</label>
-                        <input type="number" id="max-delay" value="5000" />
+                        <label>Max Delay (sec)</label>
+                        <input type="number" id="max-delay" value="3" min="0.5" step="0.5" style="width: 70px;" /> <span style="font-size: 11px;">sec</span>
                     </div>
                 </div>
                 <div class="flex mt-2" id="batch-settings-group" style="display: none;">
@@ -392,8 +255,8 @@
                         <input type="number" id="batch-size" value="10" placeholder="0 to disable" />
                     </div>
                     <div class="flex-1">
-                        <label>Batch Pause (ms)</label>
-                        <input type="number" id="batch-pause" value="10000" />
+                        <label>Batch Pause (sec)</label>
+                        <input type="number" id="batch-pause" value="10" min="1" style="width: 70px;" /> <span style="font-size: 11px;">sec</span>
                     </div>
                 </div>
             </details>
@@ -412,12 +275,18 @@
                 <div class="stat-number" id="stat-count">0</div>
                 <div id="status-indicator" style="font-size: 12px; color: var(--text-muted); margin-top: 8px;">Idle</div>
 
-                <div id="progress-container" style="display: none; margin-top: 12px; text-align: left;">
-                    <label style="display: flex; justify-content: space-between;">
-                        <span>Progress</span>
+                <div id="progress-container" style="display: none; margin-top: 16px;">
+                    <div style="display: flex; justify-content: space-between; font-size: 11px; margin-bottom: 4px; color: var(--text-muted);">
                         <span id="progress-text">0 / 0</span>
-                    </label>
+                        <span id="progress-percent">0%</span>
+                    </div>
                     <progress id="job-progress" value="0" max="100" style="width: 100%; height: 8px; border-radius: 4px; overflow: hidden;"></progress>
+                    <div style="margin-top: 12px; display: flex; align-items: center; justify-content: center;">
+                        <span id="live-rows-badge" style="background-color: var(--success); color: white; padding: 4px 12px; border-radius: 12px; font-size: 12px; font-weight: 600; display: inline-flex; align-items: center; gap: 6px; box-shadow: var(--shadow-sm);">
+                            <span class="pulse-dot" style="width: 8px; height: 8px; background-color: white; border-radius: 50%; display: inline-block; animation: pulse 1.5s infinite;"></span>
+                            Rows Extracted: <span id="live-rows-count">0</span>
+                        </span>
+                    </div>
                 </div>
             </div>
 
@@ -428,27 +297,44 @@
 
         <button id="btn-stop" class="btn btn-danger mt-4 mb-4" style="display: none; width: 100%;">⏹ Stop Running Job</button>
 
-        <div class="card mt-4">
-            <h3 style="margin-top: 0; margin-bottom: 12px; font-size: 14px;">Export Current Data</h3>
-            <div style="display: flex; gap: 8px;">
-                <button id="btn-export-csv" class="btn secondary" style="flex: 1;">Download CSV</button>
-                <button id="btn-export-excel" class="btn secondary" style="flex: 1;">Download Excel</button>
+            <div class="card">
+                <button id="btn-stop" class="btn btn-danger mb-4" style="display: none;">⏹ Stop Running Job</button>
+                <label>Export Data</label>
+                <button id="btn-export-csv" class="btn btn-primary mt-2" style="background-color: #3b82f6; border-color: #3b82f6;">📊 Download as CSV</button>
+                <button id="btn-export-excel" class="btn btn-primary mt-2" style="background-color: #10b981; border-color: #10b981;">📗 Download as Excel (.xlsx)</button>
+                <button id="btn-clear" class="btn btn-outline mt-2">🗑️ Clear Stored Data</button>
             </div>
-            <button id="btn-clear" class="btn danger mt-4" style="width: 100%;">Clear Current Session Data</button>
-        </div>
 
-        <div class="card mt-4">
-            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
-                <h3 style="margin: 0; font-size: 14px;">Past Job Runs</h3>
-                <button id="btn-clear-history" style="background: transparent; border: 1px solid var(--border); color: var(--text-muted); padding: 4px 8px; border-radius: 4px; font-size: 11px; cursor: pointer;">Clear History</button>
-            </div>
-            <div id="run-history-list" style="max-height: 250px; overflow-y: auto; display: flex; flex-direction: column; gap: 8px;">
+            <div class="card mt-4">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
+                    <h3 style="margin: 0; font-size: 14px;">Past Job Runs</h3>
+                    <div style="display: flex; gap: 8px; align-items: center;">
+                        <button id="btn-delete-selected-history" style="display: none; background: #fee2e2; border: 1px solid #fca5a5; color: #ef4444; padding: 4px 8px; border-radius: 4px; font-size: 11px; cursor: pointer;">Delete Selected</button>
+                        <button id="btn-clear-history" style="background: transparent; border: 1px solid var(--border); color: var(--text-muted); padding: 4px 8px; border-radius: 4px; font-size: 11px; cursor: pointer;">Clear All</button>
+                    </div>
                 </div>
-        </div>
+                <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 8px; padding-bottom: 8px; border-bottom: 1px solid var(--border);">
+                    <input type="checkbox" id="hist-select-all" style="width: 14px; height: 14px; margin: 0; cursor: pointer;" title="Select All" />
+                    <label for="hist-select-all" style="margin: 0; font-size: 11px; cursor: pointer;">Select All</label>
+                </div>
+                <div id="run-history-list" style="max-height: 250px; overflow-y: auto; display: flex; flex-direction: column; gap: 8px;">
+                </div>
+            </div>
         </div>
 
         <!-- SETTINGS VIEW -->
         <div id="view-settings" class="view">
+            <div class="card">
+                <div class="form-group">
+                    <label>Application Theme</label>
+                    <select id="app-theme">
+                        <option value="system">System Default</option>
+                        <option value="light">Light Mode</option>
+                        <option value="dark">Dark Mode</option>
+                    </select>
+                </div>
+            </div>
+
             <div class="card">
                 <div class="form-group">
                     <label>Default AI Platform</label>
@@ -466,7 +352,7 @@
                     <div class="form-group">
                         <div class="password-group">
                             <input type="password" id="key-openai" placeholder="sk-..." />
-                            <button type="button" class="toggle-vis" data-target="key-openai">👁️</button>
+                            <button type="button" class="toggle-vis" data-target="key-openai">🙈</button>
                         </div>
                         <input type="text" id="model-openai" list="models-openai" placeholder="Model (e.g. gpt-4o)" />
                         <datalist id="models-openai">
@@ -482,7 +368,7 @@
                     <div class="form-group">
                         <div class="password-group">
                             <input type="password" id="key-gemini" placeholder="AIza..." />
-                            <button type="button" class="toggle-vis" data-target="key-gemini">👁️</button>
+                            <button type="button" class="toggle-vis" data-target="key-gemini">🙈</button>
                         </div>
                         <input type="text" id="model-gemini" list="models-gemini" placeholder="Model (e.g. gemini-2.5-flash)" />
                         <datalist id="models-gemini">
@@ -498,7 +384,7 @@
                     <div class="form-group">
                         <div class="password-group">
                             <input type="password" id="key-claude" placeholder="sk-ant-..." />
-                            <button type="button" class="toggle-vis" data-target="key-claude">👁️</button>
+                            <button type="button" class="toggle-vis" data-target="key-claude">🙈</button>
                         </div>
                         <input type="text" id="model-claude" list="models-claude" placeholder="Model (e.g. claude-3-5-sonnet-20241022)" />
                         <datalist id="models-claude">
@@ -516,20 +402,30 @@
 
     </div>
 
-    <div style="padding: 10px 20px; border-top: 1px solid var(--border); background: var(--surface);">
-        <label class="checkbox-label" style="justify-content: center; font-size: 13px; cursor: pointer;">
+    <div style="padding: 12px 20px; border-top: 1px solid var(--border); background: var(--surface); display: flex; justify-content: space-between; align-items: center;">
+        <div>
+            <div style="font-weight: 600; font-size: 13px; color: var(--text-main);">Append Mode</div>
+            <div style="font-size: 11px; color: var(--text-muted);">Keep previous data for next run</div>
+        </div>
+        <label class="switch">
             <input type="checkbox" id="append-data-toggle" />
-            Append to previous run data (Do not clear)
+            <span class="slider"></span>
         </label>
     </div>
-    <div class="sticky-footer" id="build-footer">
-        <button id="btn-start" class="btn btn-primary" style="flex: 2;">▶ Start Scraping Job</button>
-        <button id="btn-save-job-footer" class="btn btn-outline" style="flex: 1; background: var(--surface);">Save Job</button>
+    <div class="sticky-footer" id="build-footer" style="flex-direction: column; gap: 8px;">
+        <div style="display: flex; gap: 8px; width: 100%;">
+            <button id="btn-save-job-bottom" class="btn" style="flex: 1; background-color: var(--surface); color: var(--primary); border: 1px solid var(--primary); font-weight: 600;">💾 Save Job</button>
+            <button id="btn-start" class="btn btn-primary" style="flex: 2; font-size: 14px; padding: 12px;">▶ Start Scraping Job</button>
+        </div>
+        <div class="brand-line">Created with ❤️ by <strong><a href="https://www.linkedin.com/in/famesh-thakre-6a2825118" target="_blank" style="color: inherit; text-decoration: none;">TransFamesh</a></strong>.</div>
     </div>
 
     <div id="toast-container"></div>
 
     <script src="xlsx.full.min.js"></script>
-    <script src="sidepanel.js"></script>
+    <script src="js/ui-core.js"></script>
+    <script src="js/jobs.js"></script>
+    <script src="js/export.js"></script>
+    <script src="js/main.js"></script>
 </body>
 </html>

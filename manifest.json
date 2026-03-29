@@ -1,16 +1,15 @@
 {
   "manifest_version": 3,
   "name": "AI Digger",
-  "version": "1.0",
+  "version": "1.0.0",
   "description": "A flexible, user-customizable web scraper with a visual inspector and anti-bot features.",
   "permissions": [
-    "activeTab",
     "scripting",
     "storage",
-    "tabs",
-    "downloads",
     "sidePanel",
-    "alarms"
+    "alarms",
+    "identity",
+    "identity.email"
   ],
   "host_permissions": [
     "<all_urls>",
