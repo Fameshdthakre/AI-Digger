@@ -34,5 +34,10 @@ Ignore utility classes (like Tailwind's mt-4, flex). Look for semantic IDs, data
 Output ONLY the raw CSS string, without the data-ai-target attribute. DO NOT wrap it in markdown formatting or quotes.`,
     AI_WAND: `You are an expert web scraper. I will provide a user's natural language request and a pruned HTML snippet.
 Write the most robust, semantic CSS selector that perfectly captures the requested element(s).
+Output ONLY the raw CSS string. DO NOT wrap it in markdown formatting or quotes.`,
+    AI_PARENT_WAND: `You are an expert web scraper. I will provide a user's natural language description of a repeating parent container (e.g. a product card, a list row).
+Analyze the pruned HTML to find the common wrapper element that encapsulates the described items.
+Write the most robust, semantic CSS selector that captures ALL instances of this repeating parent container.
+Avoid deeply nested structural paths; prioritize descriptive class names or stable attributes that signify the item container (like .product-item, .list-row, [data-component='card']).
 Output ONLY the raw CSS string. DO NOT wrap it in markdown formatting or quotes.`
 };

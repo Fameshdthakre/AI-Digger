@@ -2,25 +2,41 @@
 
 // Global Listener for Wand Clicks
 document.addEventListener('click', async (e) => {
-    if (e.target.closest('.btn-wand')) {
-        const wandBtn = e.target.closest('.btn-wand');
-        const row = wandBtn.closest('.field-row');
-        if (!row) return;
+    if (e.target.closest('.btn-wand') || e.target.closest('.btn-parent-wand')) {
+        const wandBtn = e.target.closest('.btn-wand') || e.target.closest('.btn-parent-wand');
+        const isParentWand = wandBtn.classList.contains('btn-parent-wand');
 
-        const query = prompt("What element do you want to find here? (e.g., 'The author name under the title')");
+        let fieldId = null;
+        const row = wandBtn.closest('.field-row');
+        if (row) {
+            fieldId = row.id;
+        } else if (wandBtn.closest('#item-container-selector-row')) {
+            fieldId = 'item-container-selector';
+        }
+
+        if (!fieldId) return;
+
+        let query = "";
+        if (isParentWand) {
+            query = prompt("Describe the repeating item container you want to find (e.g., 'The main product card containing the image and price')");
+        } else {
+            query = prompt("What element do you want to find here? (e.g., 'The author name under the title')");
+        }
+
         if (!query) return;
 
+        const originalText = wandBtn.innerText;
         wandBtn.innerText = '⏳';
-        const fieldId = row.id;
 
         const [tab] = await chrome.tabs.query({active: true, currentWindow: true});
         await chrome.scripting.executeScript({ target: { tabId: tab.id }, files: ['js/content/main.js'] }).catch(()=>null);
 
         chrome.tabs.sendMessage(tab.id, { action: 'GET_PAGE_TEXT' }, (response) => {
             if (response && response.text) {
-                chrome.runtime.sendMessage({ action: 'PROCESS_AI_WAND', fieldId, query, html: response.text });
+                const actionType = isParentWand ? 'PROCESS_AI_PARENT_WAND' : 'PROCESS_AI_WAND';
+                chrome.runtime.sendMessage({ action: actionType, fieldId, query, html: response.text });
             } else {
-                wandBtn.innerText = '🪄';
+                wandBtn.innerText = originalText;
                 showToast("Could not read page.", "error");
             }
         });
@@ -162,27 +178,52 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         sendResponse({ status: 'received' });
     } else if (message.action === 'SCRAPE_ERROR') {
         showToast(message.message, 'error');
+        sendResponse({ status: 'received' });
     } else if (message.action === 'AI_SELECTOR_RESULT') {
-        const row = document.getElementById(message.fieldId);
-        if (row) {
-            const selectorInput = row.querySelector('.f-selector') || row.querySelector('.a-selector');
-            const wandBtn = row.querySelector('.btn-wand');
-            const testBtn = row.querySelector('.test-btn') || row.querySelector('.a-test');
+        let row = document.getElementById(message.fieldId);
+        let selectorInput, wandBtn, testBtn, parentWandBtn;
 
-            if (selectorInput) selectorInput.value = message.selector;
-            if (wandBtn) wandBtn.innerText = '🪄';
-
-            // Auto-trigger the test button to show the user the result
-            if (testBtn) testBtn.click();
-            showToast("AI generated selector!", "success");
+        if (message.fieldId === 'item-container-selector') {
+            const rowEl = document.getElementById('item-container-selector-row');
+            if (rowEl) {
+                selectorInput = document.getElementById('item-container-selector');
+                wandBtn = rowEl.querySelector('.btn-wand');
+                parentWandBtn = rowEl.querySelector('.btn-parent-wand');
+                testBtn = document.getElementById('test-container-btn');
+            }
+        } else if (row) {
+            selectorInput = row.querySelector('.f-selector') || row.querySelector('.a-selector');
+            wandBtn = row.querySelector('.btn-wand');
+            parentWandBtn = row.querySelector('.btn-parent-wand');
+            testBtn = row.querySelector('.test-btn') || row.querySelector('.a-test');
         }
+
+        if (selectorInput) selectorInput.value = message.selector;
+        if (wandBtn) wandBtn.innerText = '🪄';
+        if (parentWandBtn) parentWandBtn.innerText = '📦';
+
+        // Auto-trigger the test button to show the user the result
+        if (testBtn) testBtn.click();
+        showToast("AI generated selector!", "success");
+        sendResponse({ status: 'received' });
     } else if (message.action === 'AI_SELECTOR_ERROR') {
-        const row = document.getElementById(message.fieldId);
-        if (row) {
+        let row = document.getElementById(message.fieldId);
+        if (message.fieldId === 'item-container-selector') {
+            const rowEl = document.getElementById('item-container-selector-row');
+            if (rowEl) {
+                const wandBtn = rowEl.querySelector('.btn-wand');
+                const parentWandBtn = rowEl.querySelector('.btn-parent-wand');
+                if (wandBtn) wandBtn.innerText = '🪄';
+                if (parentWandBtn) parentWandBtn.innerText = '📦';
+            }
+        } else if (row) {
             const wandBtn = row.querySelector('.btn-wand');
+            const parentWandBtn = row.querySelector('.btn-parent-wand');
             if (wandBtn) wandBtn.innerText = '🪄';
+            if (parentWandBtn) parentWandBtn.innerText = '📦';
         }
         showToast(`AI Error: ${message.error}`, "error");
+        sendResponse({ status: 'received' });
     } else if (message.action === 'INSPECTOR_CANCELLED') {
         const row = document.getElementById(message.fieldId);
         // Also check standalone buttons like container selectors
@@ -195,6 +236,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
             targetBtn.style.borderColor = 'var(--border)';
             targetBtn.innerText = '🔍';
         }
+        sendResponse({ status: 'received' });
     }
     return true;
 });
