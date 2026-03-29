@@ -1255,13 +1255,32 @@ async function generateBlueprintWithAI(userPrompt, text) {
         throw new Error("AI Platform not configured in settings. Please setup your API keys in the Settings tab.");
     }
 
-    const systemPrompt = `You are an expert web scraping architect. Generate a complete scraping job blueprint based on the user's natural language request and the provided webpage markdown.
-You MUST choose ONE of two scraping strategies:
-Strategy A (Strict Grid): If the items are in a clear repeating container (like a product card or table row), you MUST provide the 'containerSelector', set 'outputFormat' to 'flat', and set 'multiple: false' for all individual fields inside that container.
-Strategy B (Loose Elements): If there is no clear container, leave 'containerSelector' empty, set 'outputFormat' to 'flat', set 'multiple: true' for all fields to extract parallel arrays, and assign the most important anchoring field (like the Title) as the 'primaryKeyField'.`;
+        const systemPrompt = `You are an expert web scraper architect.
+I will provide you with a user request and a pruned HTML snippet of the target webpage.
+
+Your job is to generate a JSON blueprint to scrape this data.
+CRITICAL: You MUST analyze the provided HTML snippet. Generate EXACT CSS selectors using the classes, IDs, and data-* attributes present in the HTML. Do not hallucinate generic selectors. If a field asks for a link, use extractType "href". If it asks for an image, use "src".
+
+Output ONLY a valid JSON object matching this exact schema:
+{
+    "jobName": "Descriptive Name",
+    "scrapingType": "single-page" | "multi-url",
+    "outputFormat": "flat" | "grouped",
+    "containerSelector": "CSS selector for the repeating item box (if applicable, else empty)",
+    "fields": [
+        {
+            "name": "Field Name",
+            "selector": "Exact CSS Selector derived from HTML",
+            "type": "css",
+            "extractType": "text" | "href" | "src" | "attribute",
+            "attributeName": "If extractType is attribute, put name here",
+            "multiple": false
+        }
+    ]
+}`;
 
     const truncatedText = text.substring(0, 20000);
-    const prompt = `${systemPrompt}\n\nUser Request:\n"${userPrompt}"\n\nWebpage Markdown:\n"""\n${truncatedText}\n"""`;
+    const prompt = `${systemPrompt}\n\nUser Request:\n"${userPrompt}"\n\nWebpage HTML:\n"""\n${truncatedText}\n"""`;
 
     let resultJsonStr = "{}";
 
