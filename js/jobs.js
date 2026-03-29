@@ -454,14 +454,24 @@ document.getElementById('btn-export-job').addEventListener('click', () => {
     }
     const blueprint = savedJobs[jobName];
     const jsonStr = JSON.stringify(blueprint, null, 2);
+
+    // Create the Blob for the JSON data
     const blob = new Blob([jsonStr], { type: 'application/json' });
     const url = URL.createObjectURL(blob);
 
-    chrome.downloads.download({
-        url: url,
-        filename: `${jobName}_blueprint.json`,
-        saveAs: true
-    });
+    // Create a temporary hidden anchor element to trigger the download safely without extra permissions
+    const a = document.createElement('a');
+    a.style.display = 'none';
+    a.href = url;
+    a.download = `${jobName.replace(/[^a-z0-9]/gi, '_')}_blueprint.json`;
+    document.body.appendChild(a);
+    a.click();
+
+    // Clean up
+    setTimeout(() => {
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+    }, 100);
 });
 
 document.getElementById('btn-import-job').addEventListener('click', () => {
