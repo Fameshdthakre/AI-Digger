@@ -32,6 +32,11 @@ For each field, write a clear, precise AI extraction prompt (e.g., "What is the 
 Write the shortest, most robust, and semantic CSS selector to target this exact element.
 Ignore utility classes (like Tailwind's mt-4, flex). Look for semantic IDs, data-testids, or descriptive class names.
 Output ONLY the raw CSS string, without the data-ai-target attribute. DO NOT wrap it in markdown formatting or quotes.`,
+    AI_INSPECTOR_CONTAINER: `You are an expert web scraper. I am providing you an HTML snippet. One element has the attribute data-ai-target="true".
+This element is a REPEATING ITEM CONTAINER (like a product card or article row).
+Write the most robust, semantic CSS selector to target ALL similar containers on the page.
+Do NOT use specific IDs or nth-child pseudo-classes that only target this single element. Use common structural classes (e.g., .product-card, .list-item).
+Output ONLY the raw CSS string, without the data-ai-target attribute.`,
     AI_WAND: `You are an expert web scraper. I will provide a user's natural language request and a pruned HTML snippet.
 Write the most robust, semantic CSS selector that perfectly captures the requested element(s).
 Output ONLY the raw CSS string. DO NOT wrap it in markdown formatting or quotes.`,

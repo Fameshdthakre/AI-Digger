@@ -136,11 +136,7 @@ function handleClick(e) {
 
     // 3. Technical Bypass: If CTRL or CMD is held, skip AI and instantly return the local selector
     if (e.ctrlKey || e.metaKey) {
-        chrome.runtime.sendMessage({
-            action: 'AI_SELECTOR_RESULT', // Reuse this action to populate the UI instantly
-            fieldId: currentInspectFieldId,
-            selector: fallbackSelector
-        });
+        chrome.runtime.sendMessage({ action: 'INSPECTOR_RESULT', fieldId: currentInspectFieldId, selector: fallbackSelector });
         stopInspector();
         return;
     }
@@ -154,11 +150,14 @@ function handleClick(e) {
     var htmlSnippet = clone.outerHTML;
     target.removeAttribute('data-ai-target');
 
+    var isContainer = currentInspectFieldId === 'item-container-selector';
+
     chrome.runtime.sendMessage({
         action: 'PROCESS_AI_INSPECTOR',
         fieldId: currentInspectFieldId,
         htmlSnippet: htmlSnippet,
-        fallbackSelector: fallbackSelector
+        fallbackSelector: fallbackSelector,
+        isContainer: isContainer
     });
 
     stopInspector();

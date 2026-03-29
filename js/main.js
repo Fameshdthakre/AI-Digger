@@ -4,23 +4,23 @@
 document.addEventListener('click', async (e) => {
     if (e.target.closest('.btn-wand')) {
         const wandBtn = e.target.closest('.btn-wand');
+        let fieldId;
 
-        let fieldId = null;
-        const row = wandBtn.closest('.field-row');
-        if (row) {
+        if (wandBtn.id === 'wand-item-container-btn') fieldId = 'item-container-selector';
+        else if (wandBtn.id === 'wand-next-button-btn') fieldId = 'next-button-selector';
+        else if (wandBtn.id === 'wand-scroll-container-btn') fieldId = 'scroll-container-selector';
+        else {
+            const row = wandBtn.closest('.field-row');
+            if (!row) return;
             fieldId = row.id;
-        } else if (wandBtn.closest('#item-container-selector-row')) {
-            fieldId = 'item-container-selector';
         }
 
         if (!fieldId) return;
 
-        const query = prompt("What element do you want to find here? (e.g., 'The author name under the title')");
-
+        const query = prompt("What element do you want to find here? (e.g., 'The main product container' or 'The next page button')");
         if (!query) return;
 
         wandBtn.innerText = '⏳';
-
         const [tab] = await chrome.tabs.query({active: true, currentWindow: true});
         await chrome.scripting.executeScript({ target: { tabId: tab.id }, files: ['js/content/main.js'] }).catch(()=>null);
 
@@ -198,30 +198,43 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         showToast(message.message, 'error');
         sendResponse({ status: 'received' });
     } else if (message.action === 'AI_SELECTOR_RESULT') {
-        let row = document.getElementById(message.fieldId);
-        let selectorInput, wandBtn, testBtn, parentWandBtn;
+        let selectorInput, wandBtn, testBtn, inspectBtn, parentWandBtn;
 
-        if (message.fieldId === 'item-container-selector') {
-            const rowEl = document.getElementById('item-container-selector-row');
-            if (rowEl) {
-                selectorInput = document.getElementById('item-container-selector');
-                wandBtn = rowEl.querySelector('.btn-wand');
-                parentWandBtn = rowEl.querySelector('.btn-parent-wand');
-                testBtn = document.getElementById('test-container-btn');
+        if (message.fieldId === 'item-container-selector' || message.fieldId === 'next-button-selector' || message.fieldId === 'scroll-container-selector') {
+            selectorInput = document.getElementById(message.fieldId);
+            const prefix = message.fieldId.replace('-selector', '');
+            wandBtn = document.getElementById(`wand-${prefix}-btn`);
+            testBtn = document.getElementById(`test-${prefix}-btn`);
+            inspectBtn = document.getElementById(`inspect-${prefix}-btn`) || document.getElementById(`inspect-container-btn`);
+
+            if (message.fieldId === 'item-container-selector') {
+                const rowEl = document.getElementById('item-container-selector-row');
+                if (rowEl) parentWandBtn = rowEl.querySelector('.btn-parent-wand');
             }
-        } else if (row) {
-            selectorInput = row.querySelector('.f-selector') || row.querySelector('.a-selector');
-            wandBtn = row.querySelector('.btn-wand');
-            parentWandBtn = row.querySelector('.btn-parent-wand');
-            testBtn = row.querySelector('.test-btn') || row.querySelector('.a-test');
+        } else {
+            const row = document.getElementById(message.fieldId);
+            if (row) {
+                selectorInput = row.querySelector('.f-selector') || row.querySelector('.a-selector');
+                wandBtn = row.querySelector('.btn-wand');
+                testBtn = row.querySelector('.test-btn') || row.querySelector('.a-test');
+                inspectBtn = row.querySelector('.inspect-btn') || row.querySelector('.a-inspect');
+                parentWandBtn = row.querySelector('.btn-parent-wand');
+            }
         }
 
-        if (selectorInput) selectorInput.value = message.selector;
+        if (selectorInput) {
+            selectorInput.value = message.selector;
+            selectorInput.dispatchEvent(new Event('input')); // Trigger visual UI updates & safeguards
+        }
         if (wandBtn) wandBtn.innerText = '🪄';
         if (parentWandBtn) parentWandBtn.innerText = '📦';
+        if (inspectBtn) {
+            inspectBtn.style.backgroundColor = 'var(--surface)';
+            inspectBtn.style.borderColor = 'var(--border)';
+            inspectBtn.innerText = '🔍';
+        }
 
-        // Auto-trigger the test button to show the user the result
-        if (testBtn) testBtn.click();
+        if (testBtn) testBtn.click(); // Auto-test the new AI selector
         showToast("AI generated selector!", "success");
         sendResponse({ status: 'received' });
     } else if (message.action === 'AI_SELECTOR_ERROR') {
