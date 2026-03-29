@@ -236,7 +236,7 @@ function handleSaveJobClick(btnElement) {
             btnElement.style.borderColor = '';
             btnElement.style.color = '';
         }, 2000);
-        showToast(`Job "${blueprint.jobName}" saved successfully.`, "success");
+        showToast(`Job "${blueprint.jobName}" saved successfully!`, 'success');
     });
 }
 
@@ -414,7 +414,7 @@ document.getElementById('btn-delete-job').addEventListener('click', () => {
             // Reset to default new state
             document.getElementById('saved-jobs-select').value = "";
             document.getElementById('saved-jobs-select').dispatchEvent(new Event('change'));
-            showToast("Job deleted.", "success");
+            showToast("Job deleted.", 'success');
         });
     }
 });
@@ -438,7 +438,7 @@ document.getElementById('btn-clone-job').addEventListener('click', () => {
     // Switch dropdown to "Create a new job" so saving will create a new entry
     document.getElementById('saved-jobs-select').value = "";
 
-    showToast(`Job cloned as "${clonedName}". Click Save.`, "success");
+    showToast("Job cloned successfully!", 'success');
 });
 
 // Import / Export Blueprint Logic
@@ -484,10 +484,10 @@ document.getElementById('import-file-input').addEventListener('change', (e) => {
                 const select = document.getElementById('saved-jobs-select');
                 select.dispatchEvent(new Event('change'));
 
-                showToast(`Successfully imported job: ${importedBlueprint.jobName}`, "success");
+                showToast("Job imported successfully!", 'success');
             });
         } catch (err) {
-            showToast(`Failed to import blueprint: ${err.message}`, "error");
+            showToast("Invalid JSON file.", 'error');
         }
 
         // Reset the file input so the same file can be imported again if needed
