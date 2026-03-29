@@ -1,5 +1,32 @@
 // === Execution & Glue Logic ===
 
+// Global Listener for Wand Clicks
+document.addEventListener('click', async (e) => {
+    if (e.target.closest('.btn-wand')) {
+        const wandBtn = e.target.closest('.btn-wand');
+        const row = wandBtn.closest('.field-row');
+        if (!row) return;
+
+        const query = prompt("What element do you want to find here? (e.g., 'The author name under the title')");
+        if (!query) return;
+
+        wandBtn.innerText = '⏳';
+        const fieldId = row.id;
+
+        const [tab] = await chrome.tabs.query({active: true, currentWindow: true});
+        await chrome.scripting.executeScript({ target: { tabId: tab.id }, files: ['js/content/main.js'] }).catch(()=>null);
+
+        chrome.tabs.sendMessage(tab.id, { action: 'GET_PAGE_TEXT' }, (response) => {
+            if (response && response.text) {
+                chrome.runtime.sendMessage({ action: 'PROCESS_AI_WAND', fieldId, query, html: response.text });
+            } else {
+                wandBtn.innerText = '🪄';
+                showToast("Could not read page.", "error");
+            }
+        });
+    }
+});
+
 // Unified Message Listener
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     if (message.action === 'INSPECTOR_RESULT') {
@@ -135,6 +162,27 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         sendResponse({ status: 'received' });
     } else if (message.action === 'SCRAPE_ERROR') {
         showToast(message.message, 'error');
+    } else if (message.action === 'AI_SELECTOR_RESULT') {
+        const row = document.getElementById(message.fieldId);
+        if (row) {
+            const selectorInput = row.querySelector('.f-selector') || row.querySelector('.a-selector');
+            const wandBtn = row.querySelector('.btn-wand');
+            const testBtn = row.querySelector('.test-btn') || row.querySelector('.a-test');
+
+            if (selectorInput) selectorInput.value = message.selector;
+            if (wandBtn) wandBtn.innerText = '🪄';
+
+            // Auto-trigger the test button to show the user the result
+            if (testBtn) testBtn.click();
+            showToast("AI generated selector!", "success");
+        }
+    } else if (message.action === 'AI_SELECTOR_ERROR') {
+        const row = document.getElementById(message.fieldId);
+        if (row) {
+            const wandBtn = row.querySelector('.btn-wand');
+            if (wandBtn) wandBtn.innerText = '🪄';
+        }
+        showToast(`AI Error: ${message.error}`, "error");
     }
     return true;
 });

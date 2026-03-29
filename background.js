@@ -74,6 +74,21 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
             chrome.runtime.sendMessage({ action: 'MAGIC_BUILD_RESULT', error: err.message });
         });
         sendResponse({ status: 'building' });
+    } else if (message.action === 'PROCESS_AI_INSPECTOR') {
+        const prompt = `${PROMPTS.AI_INSPECTOR}\n\nHTML Snippet:\n"""\n${message.htmlSnippet}\n"""`;
+        generateSelectorWithAI(prompt).then(selector => {
+            chrome.runtime.sendMessage({ action: 'AI_SELECTOR_RESULT', fieldId: message.fieldId, selector: selector });
+        }).catch(err => {
+            chrome.runtime.sendMessage({ action: 'AI_SELECTOR_ERROR', fieldId: message.fieldId, error: err.message });
+        });
+    } else if (message.action === 'PROCESS_AI_WAND') {
+        const truncatedHtml = message.html.substring(0, 15000);
+        const prompt = `${PROMPTS.AI_WAND}\n\nUser Request: "${message.query}"\n\nPage HTML:\n"""\n${truncatedHtml}\n"""`;
+        generateSelectorWithAI(prompt).then(selector => {
+            chrome.runtime.sendMessage({ action: 'AI_SELECTOR_RESULT', fieldId: message.fieldId, selector: selector });
+        }).catch(err => {
+            chrome.runtime.sendMessage({ action: 'AI_SELECTOR_ERROR', fieldId: message.fieldId, error: err.message });
+        });
     }
     return true; // Keep message channel open for async responses
 });
@@ -1499,4 +1514,45 @@ async function archiveCurrentRun() {
     if (history.length > 50) history.pop(); // Keep only the last 50 runs
 
     await chrome.storage.local.set({ runHistory: history });
+}
+
+async function generateSelectorWithAI(fullPrompt) {
+    const settingsObj = await chrome.storage.sync.get(['aiSettings']);
+    const settings = settingsObj.aiSettings;
+
+    if (!settings || !settings.aiPlatform) throw new Error("AI Platform not configured.");
+
+    let resultStr = "";
+
+    if (settings.aiPlatform === 'openai') {
+        const response = await fetch('https://api.openai.com/v1/chat/completions', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${settings.openai.key}` },
+            body: JSON.stringify({ model: settings.openai.model || 'gpt-4o', messages: [{ role: "user", content: fullPrompt }], temperature: 0.1 })
+        });
+        if (!response.ok) throw new Error(response.statusText);
+        const data = await response.json();
+        resultStr = data.choices[0].message.content;
+    } else if (settings.aiPlatform === 'gemini') {
+        const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${settings.gemini.model || 'gemini-2.5-flash'}:generateContent?key=${settings.gemini.key}`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ contents: [{ parts: [{ text: fullPrompt }] }] })
+        });
+        if (!response.ok) throw new Error(response.statusText);
+        const data = await response.json();
+        resultStr = data.candidates[0].content.parts[0].text;
+    } else if (settings.aiPlatform === 'claude') {
+        const response = await fetch('https://api.anthropic.com/v1/messages', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'x-api-key': settings.claude.key, 'anthropic-version': '2023-06-01' },
+            body: JSON.stringify({ model: settings.claude.model || 'claude-3-5-sonnet-20241022', max_tokens: 100, messages: [{ role: "user", content: fullPrompt }] })
+        });
+        if (!response.ok) throw new Error(response.statusText);
+        const data = await response.json();
+        resultStr = data.content[0].text;
+    }
+
+    // Clean markdown fences if AI ignores instructions
+    return resultStr.replace(/^```css/i, '').replace(/^```/i, '').replace(/```$/, '').trim();
 }

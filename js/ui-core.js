@@ -90,7 +90,7 @@ function updateAntiBotSubtitle() {
     const stealth = document.getElementById('enable-stealth-mode').checked;
     const min = document.getElementById('min-delay').value;
     const max = document.getElementById('max-delay').value;
-    subtitle.innerText = `Stealth ${stealth ? 'On' : 'Off'}, ${(min/1000).toFixed(1)}-${(max/1000).toFixed(1)}s`;
+    subtitle.innerText = `Stealth ${stealth ? 'On' : 'Off'}, ${min}-${max}s`;
 }
 
 // Bind subtitle updaters to inputs
@@ -403,6 +403,7 @@ function addFieldRow(name = '', selector = '', type = 'css', extractType = 'text
             <button class="remove-field" title="Remove Field">🗑️</button>
         </div>
         <div class="field-row-bottom">
+            <button class="btn-wand" title="Describe to AI" style="flex-shrink: 0; padding: 4px 8px; font-size: 14px; background: transparent; border: 1px solid var(--border); border-radius: 4px; cursor: pointer; ${type === 'ai' ? 'display: none;' : ''}">🪄</button>
             <button class="inspect-btn" title="Inspect Selector" style="${type === 'ai' ? 'display: none;' : ''}">🔍</button>
             <button class="test-btn" title="Test Selector" style="${type === 'ai' ? 'display: none;' : ''}">🧪</button>
             <input type="text" placeholder="CSS Selector, XPath, or AI Prompt" class="f-selector" value="${selector}" style="flex: 1;" />
@@ -533,6 +534,7 @@ function addActionRow(type = 'click', selector = '', text = '') {
                 <option value="type" ${type === 'type' ? 'selected' : ''}>Type Text</option>
                 <option value="wait" ${type === 'wait' ? 'selected' : ''}>Wait For</option>
             </select>
+            <button class="btn-wand" title="Describe to AI" style="flex-shrink: 0; padding: 4px 8px; font-size: 14px; background: transparent; border: 1px solid var(--border); border-radius: 4px; cursor: pointer; ${type === 'ai' ? 'display: none;' : ''}">🪄</button>
             <button class="inspect-btn a-inspect" title="Inspect Selector" style="flex-shrink: 0;">🔍</button>
             <button class="test-btn a-test" title="Test Action" style="flex-shrink: 0;">🧪</button>
             <input type="text" placeholder="CSS or XPath Selector" class="a-selector" value="${selector}" style="flex: 1;" />

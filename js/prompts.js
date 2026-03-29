@@ -27,5 +27,12 @@ Output ONLY a valid JSON object matching this exact schema:
 Determine the page archetype (e.g., E-commerce grid, Vendor Listing, Article) and identify the optimal data fields a user would want to extract.
 For each field, write a clear, precise AI extraction prompt (e.g., "What is the price of the item?").`,
     EXTRACTION: `You are an expert data extraction agent. Extract the requested fields from the source Markdown.\nEach item must represent a discrete row/card/product found in the text. If a field is missing, return null.\n\nFields to extract:\n`,
-    SELF_HEALING: `You are an expert web scraper recovery agent.\nThe following data fields failed to match any elements on the page using their current CSS/XPath selectors.\nGiven the page Markdown below, find the missing values for these fields, AND deduce a highly resilient, semantic CSS selector for them.\nPrioritize attributes like data-testid, aria-label, or semantic class names over structural paths.\n\nFailed Fields:\n`
+    SELF_HEALING: `You are an expert web scraper recovery agent.\nThe following data fields failed to match any elements on the page using their current CSS/XPath selectors.\nGiven the page Markdown below, find the missing values for these fields, AND deduce a highly resilient, semantic CSS selector for them.\nPrioritize attributes like data-testid, aria-label, or semantic class names over structural paths.\n\nFailed Fields:\n`,
+    AI_INSPECTOR: `You are an expert web scraper. I am providing you a small HTML snippet. One element has the attribute data-ai-target="true".
+Write the shortest, most robust, and semantic CSS selector to target this exact element.
+Ignore utility classes (like Tailwind's mt-4, flex). Look for semantic IDs, data-testids, or descriptive class names.
+Output ONLY the raw CSS string, without the data-ai-target attribute. DO NOT wrap it in markdown formatting or quotes.`,
+    AI_WAND: `You are an expert web scraper. I will provide a user's natural language request and a pruned HTML snippet.
+Write the most robust, semantic CSS selector that perfectly captures the requested element(s).
+Output ONLY the raw CSS string. DO NOT wrap it in markdown formatting or quotes.`
 };
