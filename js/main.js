@@ -162,6 +162,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         sendResponse({ status: 'received' });
     } else if (message.action === 'SCRAPE_ERROR') {
         showToast(message.message, 'error');
+        sendResponse({ status: 'received' });
     } else if (message.action === 'AI_SELECTOR_RESULT') {
         const row = document.getElementById(message.fieldId);
         if (row) {
@@ -176,6 +177,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
             if (testBtn) testBtn.click();
             showToast("AI generated selector!", "success");
         }
+        sendResponse({ status: 'received' });
     } else if (message.action === 'AI_SELECTOR_ERROR') {
         const row = document.getElementById(message.fieldId);
         if (row) {
@@ -183,6 +185,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
             if (wandBtn) wandBtn.innerText = '🪄';
         }
         showToast(`AI Error: ${message.error}`, "error");
+        sendResponse({ status: 'received' });
     } else if (message.action === 'INSPECTOR_CANCELLED') {
         const row = document.getElementById(message.fieldId);
         // Also check standalone buttons like container selectors
@@ -195,6 +198,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
             targetBtn.style.borderColor = 'var(--border)';
             targetBtn.innerText = '🔍';
         }
+        sendResponse({ status: 'received' });
     }
     return true;
 });

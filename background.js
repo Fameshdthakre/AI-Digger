@@ -81,6 +81,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         }).catch(err => {
             chrome.runtime.sendMessage({ action: 'AI_SELECTOR_ERROR', fieldId: message.fieldId, error: err.message });
         });
+        sendResponse({ status: 'processing' });
     } else if (message.action === 'PROCESS_AI_WAND') {
         const truncatedHtml = message.html.substring(0, 15000);
         const prompt = `${PROMPTS.AI_WAND}\n\nUser Request: "${message.query}"\n\nPage HTML:\n"""\n${truncatedHtml}\n"""`;
@@ -89,6 +90,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         }).catch(err => {
             chrome.runtime.sendMessage({ action: 'AI_SELECTOR_ERROR', fieldId: message.fieldId, error: err.message });
         });
+        sendResponse({ status: 'processing' });
     }
     return true; // Keep message channel open for async responses
 });
