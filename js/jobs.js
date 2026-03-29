@@ -183,10 +183,10 @@ function getBlueprintFromUI() {
         })).filter(f => f.name && f.selector),
         antiBot: {
             stealthMode: document.getElementById('enable-stealth-mode').checked,
-            minDelayMs: parseInt(document.getElementById('min-delay').value),
-            maxDelayMs: parseInt(document.getElementById('max-delay').value),
-            batchSize: parseInt(document.getElementById('batch-size').value),
-            batchPauseMs: parseInt(document.getElementById('batch-pause').value)
+            minDelayMs: parseFloat(document.getElementById('min-delay').value || 1) * 1000,
+            maxDelayMs: parseFloat(document.getElementById('max-delay').value || 3) * 1000,
+            batchSize: parseInt(document.getElementById('batch-size').value || 0),
+            batchPauseMs: parseFloat(document.getElementById('batch-pause').value || 10) * 1000
         },
         singlePageOptions: {
             nextButtonSelector: document.getElementById('next-button-selector').value,
@@ -282,10 +282,10 @@ document.getElementById('saved-jobs-select').addEventListener('change', (e) => {
 
         // Reset Anti-Bot
         document.getElementById('enable-stealth-mode').checked = false;
-        document.getElementById('min-delay').value = 2000;
-        document.getElementById('max-delay').value = 5000;
+        document.getElementById('min-delay').value = 2;
+        document.getElementById('max-delay').value = 5;
         document.getElementById('batch-size').value = 10;
-        document.getElementById('batch-pause').value = 10000;
+        document.getElementById('batch-pause').value = 10;
 
         actionsContainer.innerHTML = '';
         actionCount = 0;
@@ -320,10 +320,10 @@ document.getElementById('saved-jobs-select').addEventListener('change', (e) => {
     // Set Anti-Bot
     if (blueprint.antiBot) {
         document.getElementById('enable-stealth-mode').checked = blueprint.antiBot.stealthMode || false;
-        document.getElementById('min-delay').value = blueprint.antiBot.minDelayMs || 2000;
-        document.getElementById('max-delay').value = blueprint.antiBot.maxDelayMs || 5000;
+        document.getElementById('min-delay').value = (blueprint.antiBot.minDelayMs || 2000) / 1000;
+        document.getElementById('max-delay').value = (blueprint.antiBot.maxDelayMs || 5000) / 1000;
         document.getElementById('batch-size').value = blueprint.antiBot.batchSize || 10;
-        document.getElementById('batch-pause').value = blueprint.antiBot.batchPauseMs || 10000;
+        document.getElementById('batch-pause').value = (blueprint.antiBot.batchPauseMs || 10000) / 1000;
     } else {
         document.getElementById('enable-stealth-mode').checked = false;
     }

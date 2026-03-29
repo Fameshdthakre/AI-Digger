@@ -62,40 +62,33 @@ function handleMouseOver(e) {
 
 function handleClick(e) {
     if (!inspectorActive) return;
-
-    // Always block normal click behavior while inspecting
     e.preventDefault();
     e.stopPropagation();
 
-    // Require Ctrl+Click (or Cmd+Click on Mac) to finalize selection
-    if (!e.ctrlKey && !e.metaKey) return;
+    var target = e.target;
 
-    // Generate resilient selectors
-    const selectors = generateResilientSelectors(hoveredElement);
+    // 1. Mark the target
+    target.setAttribute('data-ai-target', 'true');
 
-    // Fallback if we only want xpath
-    let finalSelector = JSON.stringify(selectors);
-    if (currentInspectMode === 'xpath') {
-        finalSelector = generateXPath(hoveredElement);
-    } else {
-        // Just send the first resilient one as a plain string if it's not JSON
-        finalSelector = JSON.stringify(selectors);
-    }
+    // 2. Get contextual wrapper (go up 2 levels if possible to give AI context)
+    var contextNode = target.parentElement ? (target.parentElement.parentElement || target.parentElement) : target;
+    var clone = contextNode.cloneNode(true);
 
-    // Flash green to indicate selection
-    overlayBox.style.backgroundColor = 'rgba(34, 197, 94, 0.4)';
-    overlayBox.style.border = '2px solid #22c55e';
+    // 3. Strip heavy garbage
+    clone.querySelectorAll('script, style, svg, path, noscript').forEach(n => n.remove());
 
-    // Send result back to sidepanel
+    var htmlSnippet = clone.outerHTML;
+
+    // 4. Clean up the actual page
+    target.removeAttribute('data-ai-target');
+
     chrome.runtime.sendMessage({
-        action: 'INSPECTOR_RESULT',
+        action: 'PROCESS_AI_INSPECTOR',
         fieldId: currentInspectFieldId,
-        selector: finalSelector
+        htmlSnippet: htmlSnippet
     });
 
-    setTimeout(() => {
-        stopInspector();
-    }, 300);
+    stopInspector();
 }
 
 function generateResilientSelectors(el) {
