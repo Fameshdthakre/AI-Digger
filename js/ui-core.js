@@ -230,6 +230,7 @@ document.getElementById('test-container-btn').addEventListener('click', async ()
     }).catch(err => console.error("Failed to inject content scripts:", err));
 
     chrome.tabs.sendMessage(tab.id, { action: 'TEST_SELECTOR', field: fieldData }, (response) => {
+        if (chrome.runtime.lastError) return;
         testBtn.innerText = '🧪';
         previewBox.style.display = 'block';
         if (response && response.result !== undefined && response.result > 0) {
@@ -265,6 +266,7 @@ document.getElementById('test-scroll-container-btn').addEventListener('click', a
     }).catch(err => console.error("Failed to inject content scripts:", err));
 
     chrome.tabs.sendMessage(tab.id, { action: 'TEST_SELECTOR', field: fieldData }, (response) => {
+        if (chrome.runtime.lastError) return;
         testBtn.innerText = '🧪';
         previewBox.style.display = 'block';
         if (response && response.result) {
@@ -282,6 +284,7 @@ document.getElementById('inspect-scroll-container-btn').addEventListener('click'
     await chrome.scripting.executeScript({ target: { tabId: tab.id }, files: ['turndown.js', 'js/content/inspector.js', 'js/content/macros.js', 'js/content/auto-detect.js', 'js/content/extractor.js', 'js/content/main.js'] }).catch(console.error);
 
     chrome.tabs.sendMessage(tab.id, { action: 'START_INSPECTOR_FOR_FIELD', fieldId: 'scroll-container-selector', mode: 'css' }, (response) => {
+        if (chrome.runtime.lastError) return;
         if (response && response.status === 'inspector_started') {
             const btn = document.getElementById('inspect-scroll-container-btn');
             btn.style.backgroundColor = 'var(--magic-bg)';
@@ -300,6 +303,7 @@ document.getElementById('inspect-container-btn').addEventListener('click', async
     }).catch(err => console.error("Failed to inject content scripts:", err));
 
     chrome.tabs.sendMessage(tab.id, { action: 'START_INSPECTOR_FOR_FIELD', fieldId: 'item-container-selector', mode: 'css' }, (response) => {
+        if (chrome.runtime.lastError) return;
         if (response && response.status === 'inspector_started') {
             const btn = document.getElementById('inspect-container-btn');
             btn.style.backgroundColor = 'var(--magic-bg)';
@@ -332,6 +336,7 @@ document.getElementById('test-next-btn').addEventListener('click', async () => {
     }).catch(err => console.error("Failed to inject content scripts:", err));
 
     chrome.tabs.sendMessage(tab.id, { action: 'TEST_SELECTOR', field: fieldData }, (response) => {
+        if (chrome.runtime.lastError) return;
         testBtn.innerText = '🧪';
         previewBox.style.display = 'block';
         if (response && response.result) {
@@ -355,6 +360,7 @@ document.getElementById('inspect-next-btn').addEventListener('click', async () =
     }).catch(err => console.error("Failed to inject content scripts:", err));
 
     chrome.tabs.sendMessage(tab.id, { action: 'START_INSPECTOR_FOR_FIELD', fieldId: 'next-button-selector', mode: 'css' }, (response) => {
+        if (chrome.runtime.lastError) return;
         if (response && response.status === 'inspector_started') {
             const btn = document.getElementById('inspect-next-btn');
             btn.style.backgroundColor = 'var(--magic-bg)';
@@ -472,6 +478,7 @@ function addFieldRow(name = '', selector = '', type = 'css', extractType = 'text
         const mode = typeSelect.value; // css or xpath
 
         chrome.tabs.sendMessage(tab.id, { action: 'START_INSPECTOR_FOR_FIELD', fieldId: fieldId, mode: mode }, (response) => {
+            if (chrome.runtime.lastError) return;
             if (response && response.status === 'inspector_started') {
                 // Change button style to indicate it's active
                 inspectBtn.style.backgroundColor = 'var(--magic-bg)';
@@ -504,6 +511,7 @@ function addFieldRow(name = '', selector = '', type = 'css', extractType = 'text
         }).catch(err => console.error("Failed to inject content scripts:", err));
 
         chrome.tabs.sendMessage(tab.id, { action: 'TEST_SELECTOR', field: fieldData }, (response) => {
+            if (chrome.runtime.lastError) return;
             testBtn.innerText = '🧪';
             previewBox.style.display = 'block';
             if (response && response.result !== undefined && response.result !== null) {
@@ -578,6 +586,7 @@ function addActionRow(type = 'click', selector = '', text = '') {
         }).catch(err => console.error("Failed to inject content scripts:", err));
 
         chrome.tabs.sendMessage(tab.id, { action: 'TEST_SELECTOR', field: fieldData }, (response) => {
+            if (chrome.runtime.lastError) return;
             testBtn.innerText = '🧪';
             previewBox.style.display = 'block';
             if (response && response.result) {
@@ -598,6 +607,7 @@ function addActionRow(type = 'click', selector = '', text = '') {
         }).catch(err => console.error(err));
 
         chrome.tabs.sendMessage(tab.id, { action: 'START_INSPECTOR_FOR_FIELD', fieldId: actionId, mode: 'css' }, (response) => {
+            if (chrome.runtime.lastError) return;
             if (response && response.status === 'inspector_started') {
                 inspectBtn.style.backgroundColor = 'var(--magic-bg)';
                 inspectBtn.style.borderColor = 'var(--magic-border)';
