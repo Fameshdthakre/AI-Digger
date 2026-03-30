@@ -52,19 +52,15 @@ if (window.hasRun) {
             return true; // async
         }
         else if (message.action === 'CLICK_NEXT') {
-            const selectors = resolveSelectorArray(message.selector);
+            let sel = message.selector;
             let el = null;
-            for (let selObj of selectors) {
-                let sel = selObj.val;
-                try {
-                    if (selObj.type === 'xpath' || sel.startsWith('//') || sel.startsWith('(')) {
-                        el = document.evaluate(sel, document, null, XPathResult.FIRST_ORDERED_NODE_TYPE, null).singleNodeValue;
-                    } else {
-                        el = document.querySelector(sel);
-                    }
-                } catch(e) {}
-                if (el) break;
-            }
+            try {
+                if (sel.startsWith('//') || sel.startsWith('(')) {
+                    el = document.evaluate(sel, document, null, XPathResult.FIRST_ORDERED_NODE_TYPE, null).singleNodeValue;
+                } else {
+                    el = document.querySelector(sel);
+                }
+            } catch(e) { console.error("Invalid selector", e); }
 
             if (el) {
                 el.click();
