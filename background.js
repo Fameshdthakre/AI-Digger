@@ -92,18 +92,49 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
             const promptTemplate = message.isContainer ? PROMPTS.AI_INSPECTOR_CONTAINER : PROMPTS.AI_INSPECTOR;
             const prompt = `${promptTemplate}\n\nHTML Snippet:\n"""\n${message.htmlSnippet}\n"""`;
 
-            generateSelectorWithAI(prompt).then(selector => {
-                chrome.runtime.sendMessage({ action: 'AI_SELECTOR_RESULT', fieldId: message.fieldId, selector: selector });
+            generateSelectorWithAI(prompt).then(async (jsonStr) => {
+                try {
+                    const parsed = JSON.parse(jsonStr);
+                    const ai_id = parsed.ai_id;
+                    if (!ai_id) throw new Error("No ai_id returned");
+                    const [tab] = await chrome.tabs.query({active: true, currentWindow: true});
+                    const res = await chrome.tabs.sendMessage(tab.id, { action: 'RESOLVE_AI_ID', ai_id: ai_id }).catch(()=>null);
+                    const finalSelector = res && res.selector ? res.selector : message.fallbackSelector;
+                    chrome.runtime.sendMessage({ action: 'AI_SELECTOR_RESULT', fieldId: message.fieldId, selector: finalSelector });
+                } catch(e) {
+                    chrome.runtime.sendMessage({ action: 'INSPECTOR_RESULT', fieldId: message.fieldId, selector: message.fallbackSelector });
+                }
             }).catch(err => {
                 chrome.runtime.sendMessage({ action: 'INSPECTOR_RESULT', fieldId: message.fieldId, selector: message.fallbackSelector });
             });
         });
         sendResponse({ status: 'processing' });
     } else if (message.action === 'PROCESS_AI_WAND') {
+        // Special case for prompt enhancement (no dom ids)
+        if (message.fieldId === 'enhance') {
+            generateSelectorWithAI(message.query).then(selector => {
+                chrome.runtime.sendMessage({ action: 'AI_SELECTOR_RESULT', fieldId: message.fieldId, selector: selector });
+            }).catch(err => {
+                chrome.runtime.sendMessage({ action: 'AI_SELECTOR_ERROR', fieldId: message.fieldId, error: err.message });
+            });
+            sendResponse({ status: 'processing' });
+            return true;
+        }
+
         const truncatedHtml = message.html.substring(0, 15000);
         const prompt = `${PROMPTS.AI_WAND}\n\nUser Request: "${message.query}"\n\nPage HTML:\n"""\n${truncatedHtml}\n"""`;
-        generateSelectorWithAI(prompt).then(selector => {
-            chrome.runtime.sendMessage({ action: 'AI_SELECTOR_RESULT', fieldId: message.fieldId, selector: selector });
+        generateSelectorWithAI(prompt).then(async (jsonStr) => {
+            try {
+                const parsed = JSON.parse(jsonStr);
+                const ai_id = parsed.ai_id;
+                if (!ai_id) throw new Error("No ai_id returned");
+                const [tab] = await chrome.tabs.query({active: true, currentWindow: true});
+                const res = await chrome.tabs.sendMessage(tab.id, { action: 'RESOLVE_AI_ID', ai_id: ai_id }).catch(()=>null);
+                const finalSelector = res && res.selector ? res.selector : "Error resolving ID";
+                chrome.runtime.sendMessage({ action: 'AI_SELECTOR_RESULT', fieldId: message.fieldId, selector: finalSelector });
+            } catch(e) {
+                chrome.runtime.sendMessage({ action: 'AI_SELECTOR_ERROR', fieldId: message.fieldId, error: "Failed to resolve AI element" });
+            }
         }).catch(err => {
             chrome.runtime.sendMessage({ action: 'AI_SELECTOR_ERROR', fieldId: message.fieldId, error: err.message });
         });
@@ -111,8 +142,18 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     } else if (message.action === 'PROCESS_AI_PARENT_WAND') {
         const truncatedHtml = message.html.substring(0, 15000);
         const prompt = `${PROMPTS.AI_PARENT_WAND}\n\nUser Request: "${message.query}"\n\nPage HTML:\n"""\n${truncatedHtml}\n"""`;
-        generateSelectorWithAI(prompt).then(selector => {
-            chrome.runtime.sendMessage({ action: 'AI_SELECTOR_RESULT', fieldId: message.fieldId, selector: selector });
+        generateSelectorWithAI(prompt).then(async (jsonStr) => {
+            try {
+                const parsed = JSON.parse(jsonStr);
+                const ai_id = parsed.ai_id;
+                if (!ai_id) throw new Error("No ai_id returned");
+                const [tab] = await chrome.tabs.query({active: true, currentWindow: true});
+                const res = await chrome.tabs.sendMessage(tab.id, { action: 'RESOLVE_AI_ID', ai_id: ai_id }).catch(()=>null);
+                const finalSelector = res && res.selector ? res.selector : "Error resolving ID";
+                chrome.runtime.sendMessage({ action: 'AI_SELECTOR_RESULT', fieldId: message.fieldId, selector: finalSelector });
+            } catch(e) {
+                chrome.runtime.sendMessage({ action: 'AI_SELECTOR_ERROR', fieldId: message.fieldId, error: "Failed to resolve AI element" });
+            }
         }).catch(err => {
             chrome.runtime.sendMessage({ action: 'AI_SELECTOR_ERROR', fieldId: message.fieldId, error: err.message });
         });
@@ -603,7 +644,7 @@ async function ensureScriptInjected(tabId) {
                 'js/content/macros.js',
                 'js/content/auto-detect.js',
                 'js/content/extractor.js',
-                'js/content/main.js'
+                'js/content/dom-tagger.js', 'js/content/main.js'
             ]
         });
     } catch (err) {

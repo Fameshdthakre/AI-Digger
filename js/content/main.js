@@ -73,6 +73,25 @@ if (window.hasRun) {
             const result = extractFieldData(message.field);
             sendResponse({ result: result });
         }
+        else if (message.action === 'INJECT_AI_IDS') {
+            if (window.injectAiIds) {
+                window.injectAiIds();
+            }
+            sendResponse({ status: 'injected' });
+        }
+        else if (message.action === 'RESOLVE_AI_ID') {
+            const ai_id = message.ai_id;
+            let finalSelector = null;
+            if (ai_id) {
+                const el = document.querySelector(`[data-ai-id="${ai_id}"]`);
+                if (el && window.generateResilientSelectors) {
+                    const selectors = window.generateResilientSelectors(el);
+                    finalSelector = selectors.length > 0 ? selectors[0].val : null;
+                }
+            }
+            if (window.cleanAiIds) window.cleanAiIds();
+            sendResponse({ selector: finalSelector });
+        }
         else if (message.action === 'GET_PAGE_TEXT') {
             try {
                 const clone = document.body.cloneNode(true);
