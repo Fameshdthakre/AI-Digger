@@ -30,7 +30,7 @@ For each field, write a clear, precise AI extraction prompt (e.g., "What is the 
     SELF_HEALING: `You are an expert web scraper recovery agent.\nThe following data fields failed to match any elements on the page using their current CSS/XPath selectors.\nGiven the page Markdown below, find the missing values for these fields, AND deduce a highly resilient, semantic CSS selector for them.\nPrioritize attributes like data-testid, aria-label, or semantic class names over structural paths.\n\nFailed Fields:\n`,
     AI_INSPECTOR: `You are an expert web scraper. I am providing you a small HTML snippet. One element has the attribute data-ai-target="true".
 Write the shortest, most robust, and semantic CSS selector to target this exact element.
-Ignore utility classes (like Tailwind's mt-4, flex). Look for semantic IDs, data-testids, or descriptive class names.
+CRITICAL: Completely ignore auto-generated, randomized utility classes (like Tailwind 'mt-4', 'flex', or styled-components 'css-1xk'). You MUST prioritize semantic attributes like 'data-testid', 'aria-label', 'name', or stable, descriptive class names.
 Output ONLY the raw CSS string, without the data-ai-target attribute. DO NOT wrap it in markdown formatting or quotes.`,
     AI_INSPECTOR_CONTAINER: `You are an expert web scraper. I am providing you an HTML snippet. One element has the attribute data-ai-target="true".
 This element is a REPEATING ITEM CONTAINER (like a product card or article row).
@@ -39,10 +39,12 @@ Do NOT use specific IDs or nth-child pseudo-classes that only target this single
 Output ONLY the raw CSS string, without the data-ai-target attribute.`,
     AI_WAND: `You are an expert web scraper. I will provide a user's natural language request and a pruned HTML snippet.
 Write the most robust, semantic CSS selector that perfectly captures the requested element(s).
+CRITICAL: Completely ignore auto-generated, randomized utility classes (like Tailwind 'mt-4', 'flex', or styled-components 'css-1xk'). You MUST prioritize semantic attributes like 'data-testid', 'aria-label', 'name', or stable, descriptive class names.
 Output ONLY the raw CSS string. DO NOT wrap it in markdown formatting or quotes.`,
     AI_PARENT_WAND: `You are an expert web scraper. I will provide a user's natural language description of a repeating parent container (e.g. a product card, a list row).
 Analyze the pruned HTML to find the common wrapper element that encapsulates the described items.
 Write the most robust, semantic CSS selector that captures ALL instances of this repeating parent container.
 Avoid deeply nested structural paths; prioritize descriptive class names or stable attributes that signify the item container (like .product-item, .list-row, [data-component='card']).
+CRITICAL: Completely ignore auto-generated, randomized utility classes (like Tailwind 'mt-4', 'flex', or styled-components 'css-1xk'). You MUST prioritize semantic attributes like 'data-testid', 'aria-label', 'name', or stable, descriptive class names.
 Output ONLY the raw CSS string. DO NOT wrap it in markdown formatting or quotes.`
 };

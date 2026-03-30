@@ -124,6 +124,26 @@ document.querySelectorAll('.tab').forEach(tab => {
     });
 });
 
+// Append Toggle Persistence
+const appendToggle = document.getElementById('append-data-toggle');
+if (appendToggle) {
+    chrome.storage.local.get(['appendToggleState'], (res) => {
+        appendToggle.checked = res.appendToggleState || false;
+    });
+    appendToggle.addEventListener('change', (e) => {
+        chrome.storage.local.set({ appendToggleState: e.target.checked });
+    });
+}
+
+// Global CTRL+S / CMD+S Shortcut to Save Job
+document.addEventListener('keydown', (e) => {
+    if ((e.ctrlKey || e.metaKey) && e.key === 's') {
+        e.preventDefault(); // Prevent browser save dialog
+        const saveBtnTop = document.getElementById('btn-save-job');
+        if (saveBtnTop) saveBtnTop.click();
+    }
+});
+
 // Toggle visibility based on mode
 document.getElementById('scrape-mode').addEventListener('change', (e) => {
     const isMulti = e.target.value === 'multi-url';

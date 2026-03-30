@@ -200,6 +200,16 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         showToast(message.message, 'error');
         sendResponse({ status: 'received' });
     } else if (message.action === 'AI_SELECTOR_RESULT') {
+        if (message.fieldId === 'enhance') {
+            const promptEl = document.getElementById('nl-prompt');
+            const btn = document.getElementById('btn-enhance-prompt');
+            if (promptEl) promptEl.value = message.selector;
+            if (btn) { btn.innerText = '🪄 Enhance Prompt'; btn.disabled = false; }
+            showToast("Prompt enhanced!", "success");
+            sendResponse({ status: 'received' });
+            return true;
+        }
+
         let selectorInput, wandBtn, testBtn, inspectBtn, parentWandBtn;
 
         if (message.fieldId === 'item-container-selector' || message.fieldId === 'next-button-selector' || message.fieldId === 'scroll-container-selector') {
@@ -325,6 +335,24 @@ document.getElementById('btn-record-macro').addEventListener('click', async () =
     }).catch(err => console.error(err));
 
     chrome.tabs.sendMessage(tab.id, { action: 'TOGGLE_MACRO_RECORDING', isRecording: isRecordingMacro });
+});
+
+// Enhance Prompt Logic
+document.getElementById('btn-enhance-prompt')?.addEventListener('click', () => {
+    const promptEl = document.getElementById('nl-prompt');
+    if (!promptEl.value.trim()) {
+        showToast("Enter a basic idea first to enhance it.", "info");
+        return;
+    }
+    const btn = document.getElementById('btn-enhance-prompt');
+    const origText = btn.innerText;
+    btn.innerText = '⏳ Enhancing...';
+    btn.disabled = true;
+
+    // Send to background to enhance (reuses AI Selector function for simple text-in/text-out)
+    const enhancePrompt = `You are an expert prompt engineer. The user wants to scrape a website. Take their short request and expand it into a detailed, professional instruction for a web scraper. \nUser Request: "${promptEl.value}"\nOutput ONLY the improved prompt, no quotes, no extra conversational text.`;
+
+    chrome.runtime.sendMessage({ action: 'PROCESS_AI_WAND', fieldId: 'enhance', query: enhancePrompt, html: 'none' });
 });
 
 // Magic Build Logic
