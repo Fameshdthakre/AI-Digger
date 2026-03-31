@@ -29,14 +29,22 @@ For each field, write a clear, precise AI extraction prompt (e.g., "What is the 
     EXTRACTION: `You are an expert data extraction agent. Extract the requested fields from the source Markdown.\nEach item must represent a discrete row/card/product found in the text. If a field is missing, return null.\n\nFields to extract:\n`,
     SELF_HEALING: `You are an expert web scraper recovery agent.\nThe following data fields failed to match any elements on the page using their current CSS/XPath selectors.\nGiven the page Markdown below, find the missing values for these fields, AND deduce a highly resilient, semantic CSS selector for them.\nPrioritize attributes like data-testid, aria-label, or semantic class names over structural paths.\n\nFailed Fields:\n`,
     AI_INSPECTOR: `You are an expert web scraper. I am providing you a small HTML snippet. One element has the attribute data-ai-target="true".
-I have provided a simplified HTML snippet where every element has a data-ai-id attribute. Find the element the user is requesting. Output ONLY a valid JSON object matching this exact schema: {"ai_id": "the_number"}. Do not output markdown, CSS, or any other text.`,
+Write the shortest, most robust, and semantic CSS selector to target this exact element.
+CRITICAL: Completely ignore auto-generated, randomized utility classes (like Tailwind 'mt-4', 'flex', or styled-components 'css-1xk'). You MUST prioritize semantic attributes like 'data-testid', 'aria-label', 'name', or stable, descriptive class names.
+Output ONLY the raw CSS string, without the data-ai-target attribute. DO NOT wrap it in markdown formatting or quotes.`,
     AI_INSPECTOR_CONTAINER: `You are an expert web scraper. I am providing you an HTML snippet. One element has the attribute data-ai-target="true".
 This element is a REPEATING ITEM CONTAINER (like a product card or article row).
-I have provided a simplified HTML snippet where every element has a data-ai-id attribute. Find the element the user is requesting. Output ONLY a valid JSON object matching this exact schema: {"ai_id": "the_number"}. Do not output markdown, CSS, or any other text.`,
+Write the most robust, semantic CSS selector to target ALL similar containers on the page.
+Do NOT use specific IDs or nth-child pseudo-classes that only target this single element. Use common structural classes (e.g., .product-card, .list-item).
+Output ONLY the raw CSS string, without the data-ai-target attribute.`,
     AI_WAND: `You are an expert web scraper. I will provide a user's natural language request and a pruned HTML snippet.
-I have provided a simplified HTML snippet where every element has a data-ai-id attribute. Find the element the user is requesting. Output ONLY a valid JSON object matching this exact schema: {"ai_id": "the_number"}. Do not output markdown, CSS, or any other text.`,
+Write the most robust, semantic CSS selector that perfectly captures the requested element(s).
+CRITICAL: Completely ignore auto-generated, randomized utility classes (like Tailwind 'mt-4', 'flex', or styled-components 'css-1xk'). You MUST prioritize semantic attributes like 'data-testid', 'aria-label', 'name', or stable, descriptive class names.
+Output ONLY the raw CSS string. DO NOT wrap it in markdown formatting or quotes.`,
     AI_PARENT_WAND: `You are an expert web scraper. I will provide a user's natural language description of a repeating parent container (e.g. a product card, a list row).
 Analyze the pruned HTML to find the common wrapper element that encapsulates the described items.
-I have provided a simplified HTML snippet where every element has a data-ai-id attribute. Find the element the user is requesting. Output ONLY a valid JSON object matching this exact schema: {"ai_id": "the_number"}. Do not output markdown, CSS, or any other text.`,
-    SCHEMA_BUILDER: `Map the keys in the user's JSON Schema to the exact data-ai-id attributes in the HTML. Return a JSON array: [{"name": "Key_Name", "ai_id": "14", "extractType": "text"}]. Do not output markdown, CSS, or any other text.`
+Write the most robust, semantic CSS selector that captures ALL instances of this repeating parent container.
+Avoid deeply nested structural paths; prioritize descriptive class names or stable attributes that signify the item container (like .product-item, .list-row, [data-component='card']).
+CRITICAL: Completely ignore auto-generated, randomized utility classes (like Tailwind 'mt-4', 'flex', or styled-components 'css-1xk'). You MUST prioritize semantic attributes like 'data-testid', 'aria-label', 'name', or stable, descriptive class names.
+Output ONLY the raw CSS string. DO NOT wrap it in markdown formatting or quotes.`
 };

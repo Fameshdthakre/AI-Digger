@@ -22,9 +22,7 @@ document.addEventListener('click', async (e) => {
 
         wandBtn.innerText = '⏳';
         const [tab] = await chrome.tabs.query({active: true, currentWindow: true});
-        await chrome.scripting.executeScript({ target: { tabId: tab.id }, files: ['js/content/vision-helper.js', 'js/content/dom-tagger.js', 'js/content/main.js'] }).catch(()=>null);
-
-        await chrome.tabs.sendMessage(tab.id, { action: 'INJECT_AI_IDS' }).catch(()=>null);
+        await chrome.scripting.executeScript({ target: { tabId: tab.id }, files: ['js/content/main.js'] }).catch(()=>null);
 
         chrome.tabs.sendMessage(tab.id, { action: 'GET_PAGE_TEXT' }, (response) => {
             if (chrome.runtime.lastError) return;
@@ -51,7 +49,7 @@ document.addEventListener('click', async (e) => {
         const [tab] = await chrome.tabs.query({active: true, currentWindow: true});
         await chrome.scripting.executeScript({
             target: { tabId: tab.id },
-            files: ['turndown.js', 'js/content/inspector.js', 'js/content/macros.js', 'js/content/auto-detect.js', 'js/content/extractor.js', 'js/content/vision-helper.js', 'js/content/dom-tagger.js', 'js/content/main.js']
+            files: ['turndown.js', 'js/content/inspector.js', 'js/content/macros.js', 'js/content/auto-detect.js', 'js/content/extractor.js', 'js/content/main.js']
         }).catch(err => console.error("Failed to inject content scripts:", err));
 
         chrome.tabs.sendMessage(tab.id, { action: 'START_INSPECTOR_FOR_FIELD', fieldId: fieldId, mode: 'parent' }, (response) => {
@@ -151,12 +149,6 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         const btn = document.getElementById('btn-generate-blueprint');
         btn.innerText = 'Generate Blueprint';
         btn.disabled = false;
-
-        const btnSchema = document.getElementById('btn-schema-build');
-        if (btnSchema) {
-            btnSchema.innerText = 'Generate from Schema';
-            btnSchema.disabled = false;
-        }
 
         if (message.error) {
             showToast(`Magic Build failed: ${message.error}`, "error");
@@ -310,7 +302,7 @@ document.getElementById('btn-auto-detect').addEventListener('click', async () =>
     const [tab] = await chrome.tabs.query({active: true, currentWindow: true});
     await chrome.scripting.executeScript({
         target: { tabId: tab.id },
-        files: ['turndown.js', 'js/content/inspector.js', 'js/content/macros.js', 'js/content/auto-detect.js', 'js/content/extractor.js', 'js/content/vision-helper.js', 'js/content/dom-tagger.js', 'js/content/main.js']
+        files: ['turndown.js', 'js/content/inspector.js', 'js/content/macros.js', 'js/content/auto-detect.js', 'js/content/extractor.js', 'js/content/main.js']
     }).catch(err => console.error(err));
 
     chrome.tabs.sendMessage(tab.id, { action: 'START_AUTO_DETECT' }, (response) => {
@@ -339,53 +331,10 @@ document.getElementById('btn-record-macro').addEventListener('click', async () =
     const [tab] = await chrome.tabs.query({active: true, currentWindow: true});
     await chrome.scripting.executeScript({
         target: { tabId: tab.id },
-        files: ['turndown.js', 'js/content/inspector.js', 'js/content/macros.js', 'js/content/auto-detect.js', 'js/content/extractor.js', 'js/content/vision-helper.js', 'js/content/dom-tagger.js', 'js/content/main.js']
+        files: ['turndown.js', 'js/content/inspector.js', 'js/content/macros.js', 'js/content/auto-detect.js', 'js/content/extractor.js', 'js/content/main.js']
     }).catch(err => console.error(err));
 
     chrome.tabs.sendMessage(tab.id, { action: 'TOGGLE_MACRO_RECORDING', isRecording: isRecordingMacro });
-});
-
-// Zero-Shot Schema Build Logic
-document.getElementById('btn-schema-build')?.addEventListener('click', async () => {
-    const btn = document.getElementById('btn-schema-build');
-    const schemaText = document.getElementById('schema-prompt').value;
-    if (!schemaText.trim()) {
-        showToast("Please enter a JSON Schema.", "error");
-        return;
-    }
-
-    try {
-        JSON.parse(schemaText); // Validate JSON
-    } catch(e) {
-        showToast("Invalid JSON Schema format.", "error");
-        return;
-    }
-
-    btn.innerText = 'Generating...';
-    btn.disabled = true;
-
-    const [tab] = await chrome.tabs.query({active: true, currentWindow: true});
-    await chrome.scripting.executeScript({
-        target: { tabId: tab.id },
-        files: ['turndown.js', 'js/content/inspector.js', 'js/content/macros.js', 'js/content/auto-detect.js', 'js/content/extractor.js', 'js/content/vision-helper.js', 'js/content/dom-tagger.js', 'js/content/main.js']
-    }).catch(err => console.error(err));
-
-    await chrome.tabs.sendMessage(tab.id, { action: 'INJECT_AI_IDS' }).catch(()=>null);
-
-    chrome.tabs.sendMessage(tab.id, { action: 'GET_PAGE_TEXT' }, (response) => {
-        if (chrome.runtime.lastError) return;
-        if (response && response.text) {
-            chrome.runtime.sendMessage({
-                action: 'PROCESS_SCHEMA_BUILD',
-                schema: schemaText,
-                html: response.text
-            });
-        } else {
-            btn.innerText = 'Generate from Schema';
-            btn.disabled = false;
-            showToast("Could not extract text from page to analyze.", "error");
-        }
-    });
 });
 
 // Enhance Prompt Logic
@@ -421,7 +370,7 @@ document.getElementById('btn-generate-blueprint').addEventListener('click', asyn
     const [tab] = await chrome.tabs.query({active: true, currentWindow: true});
     await chrome.scripting.executeScript({
         target: { tabId: tab.id },
-        files: ['turndown.js', 'js/content/inspector.js', 'js/content/macros.js', 'js/content/auto-detect.js', 'js/content/extractor.js', 'js/content/vision-helper.js', 'js/content/dom-tagger.js', 'js/content/main.js']
+        files: ['turndown.js', 'js/content/inspector.js', 'js/content/macros.js', 'js/content/auto-detect.js', 'js/content/extractor.js', 'js/content/main.js']
     }).catch(err => console.error(err));
 
     chrome.tabs.sendMessage(tab.id, { action: 'GET_PAGE_TEXT' }, (response) => {

@@ -75,59 +75,6 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
             chrome.runtime.sendMessage({ action: 'MAGIC_BUILD_RESULT', error: err.message });
         });
         sendResponse({ status: 'building' });
-    } else if (message.action === 'PROCESS_SCHEMA_BUILD') {
-        const truncatedHtml = message.html.substring(0, 15000);
-        const prompt = `${PROMPTS.SCHEMA_BUILDER}\n\nUser Schema: "${message.schema}"\n\nPage HTML:\n"""\n${truncatedHtml}\n"""`;
-        generateSelectorWithAI(prompt).then(async (jsonStr) => {
-            try {
-                const parsedFields = JSON.parse(jsonStr);
-                const [tab] = await chrome.tabs.query({active: true, currentWindow: true});
-
-                const finalFields = [];
-                for (let f of parsedFields) {
-                    let selector = "";
-                    if (f.ai_id) {
-                        const res = await chrome.tabs.sendMessage(tab.id, { action: 'RESOLVE_AI_ID', ai_id: f.ai_id, keepIds: true }).catch(()=>null);
-                        if (res && res.selector) selector = res.selector;
-                    }
-                    if (selector) {
-                        finalFields.push({
-                            name: f.name,
-                            selector: selector,
-                            type: 'css',
-                            extractType: f.extractType || 'text',
-                            multiple: false
-                        });
-                    }
-                }
-
-                // Cleanup IDs when loop finishes
-                await chrome.scripting.executeScript({
-                    target: { tabId: tab.id },
-                    func: () => { if (window.cleanAiIds) window.cleanAiIds(); }
-                }).catch(() => null);
-
-                const blueprint = {
-                    jobName: "Schema Job",
-                    scrapingType: "single-page",
-                    containerSelector: "",
-                    singlePageOptions: {
-                        nextButtonSelector: "",
-                        maxPages: 1,
-                        infiniteScroll: false,
-                        maxScrolls: 0
-                    },
-                    fields: finalFields
-                };
-
-                chrome.runtime.sendMessage({ action: 'MAGIC_BUILD_RESULT', blueprint: blueprint });
-            } catch(e) {
-                chrome.runtime.sendMessage({ action: 'MAGIC_BUILD_RESULT', error: "Failed to parse schema response." });
-            }
-        }).catch(err => {
-            chrome.runtime.sendMessage({ action: 'MAGIC_BUILD_RESULT', error: err.message });
-        });
-        sendResponse({ status: 'building' });
     } else if (message.action === 'PROCESS_AI_INSPECTOR') {
         chrome.storage.sync.get(['aiSettings'], (res) => {
             const settings = res.aiSettings;
@@ -145,49 +92,18 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
             const promptTemplate = message.isContainer ? PROMPTS.AI_INSPECTOR_CONTAINER : PROMPTS.AI_INSPECTOR;
             const prompt = `${promptTemplate}\n\nHTML Snippet:\n"""\n${message.htmlSnippet}\n"""`;
 
-            generateSelectorWithAI(prompt).then(async (jsonStr) => {
-                try {
-                    const parsed = JSON.parse(jsonStr);
-                    const ai_id = parsed.ai_id;
-                    if (!ai_id) throw new Error("No ai_id returned");
-                    const [tab] = await chrome.tabs.query({active: true, currentWindow: true});
-                    const res = await chrome.tabs.sendMessage(tab.id, { action: 'RESOLVE_AI_ID', ai_id: ai_id }).catch(()=>null);
-                    const finalSelector = res && res.selector ? res.selector : message.fallbackSelector;
-                    chrome.runtime.sendMessage({ action: 'AI_SELECTOR_RESULT', fieldId: message.fieldId, selector: finalSelector });
-                } catch(e) {
-                    chrome.runtime.sendMessage({ action: 'INSPECTOR_RESULT', fieldId: message.fieldId, selector: message.fallbackSelector });
-                }
+            generateSelectorWithAI(prompt).then(selector => {
+                chrome.runtime.sendMessage({ action: 'AI_SELECTOR_RESULT', fieldId: message.fieldId, selector: selector });
             }).catch(err => {
                 chrome.runtime.sendMessage({ action: 'INSPECTOR_RESULT', fieldId: message.fieldId, selector: message.fallbackSelector });
             });
         });
         sendResponse({ status: 'processing' });
     } else if (message.action === 'PROCESS_AI_WAND') {
-        // Special case for prompt enhancement (no dom ids)
-        if (message.fieldId === 'enhance') {
-            generateSelectorWithAI(message.query).then(selector => {
-                chrome.runtime.sendMessage({ action: 'AI_SELECTOR_RESULT', fieldId: message.fieldId, selector: selector });
-            }).catch(err => {
-                chrome.runtime.sendMessage({ action: 'AI_SELECTOR_ERROR', fieldId: message.fieldId, error: err.message });
-            });
-            sendResponse({ status: 'processing' });
-            return true;
-        }
-
         const truncatedHtml = message.html.substring(0, 15000);
         const prompt = `${PROMPTS.AI_WAND}\n\nUser Request: "${message.query}"\n\nPage HTML:\n"""\n${truncatedHtml}\n"""`;
-        generateSelectorWithAI(prompt).then(async (jsonStr) => {
-            try {
-                const parsed = JSON.parse(jsonStr);
-                const ai_id = parsed.ai_id;
-                if (!ai_id) throw new Error("No ai_id returned");
-                const [tab] = await chrome.tabs.query({active: true, currentWindow: true});
-                const res = await chrome.tabs.sendMessage(tab.id, { action: 'RESOLVE_AI_ID', ai_id: ai_id }).catch(()=>null);
-                const finalSelector = res && res.selector ? res.selector : "Error resolving ID";
-                chrome.runtime.sendMessage({ action: 'AI_SELECTOR_RESULT', fieldId: message.fieldId, selector: finalSelector });
-            } catch(e) {
-                chrome.runtime.sendMessage({ action: 'AI_SELECTOR_ERROR', fieldId: message.fieldId, error: "Failed to resolve AI element" });
-            }
+        generateSelectorWithAI(prompt).then(selector => {
+            chrome.runtime.sendMessage({ action: 'AI_SELECTOR_RESULT', fieldId: message.fieldId, selector: selector });
         }).catch(err => {
             chrome.runtime.sendMessage({ action: 'AI_SELECTOR_ERROR', fieldId: message.fieldId, error: err.message });
         });
@@ -195,18 +111,8 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     } else if (message.action === 'PROCESS_AI_PARENT_WAND') {
         const truncatedHtml = message.html.substring(0, 15000);
         const prompt = `${PROMPTS.AI_PARENT_WAND}\n\nUser Request: "${message.query}"\n\nPage HTML:\n"""\n${truncatedHtml}\n"""`;
-        generateSelectorWithAI(prompt).then(async (jsonStr) => {
-            try {
-                const parsed = JSON.parse(jsonStr);
-                const ai_id = parsed.ai_id;
-                if (!ai_id) throw new Error("No ai_id returned");
-                const [tab] = await chrome.tabs.query({active: true, currentWindow: true});
-                const res = await chrome.tabs.sendMessage(tab.id, { action: 'RESOLVE_AI_ID', ai_id: ai_id }).catch(()=>null);
-                const finalSelector = res && res.selector ? res.selector : "Error resolving ID";
-                chrome.runtime.sendMessage({ action: 'AI_SELECTOR_RESULT', fieldId: message.fieldId, selector: finalSelector });
-            } catch(e) {
-                chrome.runtime.sendMessage({ action: 'AI_SELECTOR_ERROR', fieldId: message.fieldId, error: "Failed to resolve AI element" });
-            }
+        generateSelectorWithAI(prompt).then(selector => {
+            chrome.runtime.sendMessage({ action: 'AI_SELECTOR_RESULT', fieldId: message.fieldId, selector: selector });
         }).catch(err => {
             chrome.runtime.sendMessage({ action: 'AI_SELECTOR_ERROR', fieldId: message.fieldId, error: err.message });
         });
@@ -697,7 +603,7 @@ async function ensureScriptInjected(tabId) {
                 'js/content/macros.js',
                 'js/content/auto-detect.js',
                 'js/content/extractor.js',
-                'js/content/vision-helper.js', 'js/content/dom-tagger.js', 'js/content/main.js'
+                'js/content/main.js'
             ]
         });
     } catch (err) {
@@ -1268,56 +1174,10 @@ async function processSelfHealing(tabId, job, failedFields, markdown) {
                 }
             }
 
-            if (allValid) {
+            if (allValid || attempts >= 2) {
                 return {
                     recoveredValues: parsed.recoveredValues || {},
                     updatedFields: parsed.updatedFields || []
-                };
-            } else if (attempts >= 2) {
-                addLog(`Text-based self-healing failed validation. Falling back to Vision (SoM)...`);
-
-                const visionUpdates = [];
-                const recovered = parsed.recoveredValues || {};
-
-                for (let healedF of healedFields) {
-                    try {
-                        const originalField = job.fields.find(f => f.name === healedF.name);
-                        if (!originalField) continue;
-
-                        await chrome.tabs.sendMessage(tabId, { action: 'DRAW_BOXES' }).catch(() => null);
-                        await sleep(500); // Give DOM time to paint
-
-                        const dataUrl = await chrome.tabs.captureVisibleTab(null, {format: 'jpeg', quality: 60});
-
-                        // Clear boxes immediately so user doesn't see them lingering
-                        await chrome.tabs.sendMessage(tabId, { action: 'CLEAR_BOXES' }).catch(() => null);
-
-                        const prompt = `Find the element that represents: ${healedF.name}. Look at the numbered boxes in the image. Return ONLY a JSON object matching exactly this schema: {"box_id": "the_number"}. Do not return any other text.`;
-
-                        const boxIdJson = await processVisionPrompt(settings, prompt, dataUrl);
-                        const boxObj = JSON.parse(boxIdJson);
-
-                        if (boxObj && boxObj.box_id) {
-                            const res = await chrome.tabs.sendMessage(tabId, { action: 'RESOLVE_BOX_ID', box_id: boxObj.box_id }).catch(() => null);
-                            if (res && res.selector) {
-                                addLog(`Vision successfully identified ${healedF.name} at box ${boxObj.box_id}`);
-                                visionUpdates.push({
-                                    name: healedF.name,
-                                    selector: res.selector
-                                });
-                                // We don't try to extract the *value* here, we just save the updated selector
-                                // and assume the next run/batch will grab it, or we leave it null for this row.
-                            }
-                        }
-                    } catch (err) {
-                        addLog(`Vision fallback failed for ${healedF.name}: ${err.message}`);
-                        await chrome.tabs.sendMessage(tabId, { action: 'CLEAR_BOXES' }).catch(() => null);
-                    }
-                }
-
-                return {
-                    recoveredValues: recovered,
-                    updatedFields: visionUpdates.length > 0 ? visionUpdates : healedFields
                 };
             } else {
                 addLog(`Self-healing attempt ${attempts} failed validation. Retrying...`);
@@ -1329,83 +1189,6 @@ async function processSelfHealing(tabId, job, failedFields, markdown) {
             if (attempts >= 2) throw new Error("AI returned invalid JSON during recovery.");
         }
     }
-}
-
-async function processVisionPrompt(settings, prompt, base64Image) {
-    // Remove the data:image/jpeg;base64, prefix if present, but OpenAI wants it for image_url
-    // Gemini wants just the raw base64 data.
-    const isDataUrl = base64Image.startsWith('data:');
-    const rawBase64 = isDataUrl ? base64Image.split(',')[1] : base64Image;
-    const formattedDataUrl = isDataUrl ? base64Image : `data:image/jpeg;base64,${base64Image}`;
-
-    if (settings.aiPlatform === 'openai') {
-        const response = await fetch('https://api.openai.com/v1/chat/completions', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${settings.openai.key}` },
-            body: JSON.stringify({
-                model: settings.openai.model === 'gpt-3.5-turbo' ? 'gpt-4o' : (settings.openai.model || 'gpt-4o'), // Fallback to 4o if 3.5 is set
-                messages: [
-                    {
-                        role: "user",
-                        content: [
-                            { type: "text", text: prompt },
-                            { type: "image_url", image_url: { url: formattedDataUrl } }
-                        ]
-                    }
-                ],
-                temperature: 0.1,
-                response_format: { type: "json_object" }
-            })
-        });
-        if (!response.ok) throw new Error(response.statusText);
-        const data = await response.json();
-        return data.choices[0].message.content;
-    } else if (settings.aiPlatform === 'gemini') {
-        const model = settings.gemini.model || 'gemini-2.5-flash';
-        const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${settings.gemini.key}`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-                contents: [{
-                    parts: [
-                        { text: prompt },
-                        { inlineData: { mimeType: "image/jpeg", data: rawBase64 } }
-                    ]
-                }],
-                generationConfig: { responseMimeType: "application/json" }
-            })
-        });
-        if (!response.ok) throw new Error(response.statusText);
-        const data = await response.json();
-        return data.candidates[0].content.parts[0].text;
-    } else if (settings.aiPlatform === 'claude') {
-        const response = await fetch('https://api.anthropic.com/v1/messages', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                'x-api-key': settings.claude.key,
-                'anthropic-version': '2023-06-01'
-            },
-            body: JSON.stringify({
-                model: settings.claude.model || 'claude-3-5-sonnet-20241022',
-                max_tokens: 300,
-                messages: [
-                    {
-                        role: "user",
-                        content: [
-                            { type: "image", source: { type: "base64", media_type: "image/jpeg", data: rawBase64 } },
-                            { type: "text", text: prompt }
-                        ]
-                    }
-                ]
-            })
-        });
-        if (!response.ok) throw new Error(response.statusText);
-        const data = await response.json();
-        return data.content[0].text;
-    }
-
-    throw new Error("Vision unsupported or platform not matched.");
 }
 
 // Helper: AI Blueprint Analyzer Caller
