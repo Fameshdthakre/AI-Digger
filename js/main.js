@@ -152,6 +152,12 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         btn.innerText = 'Generate Blueprint';
         btn.disabled = false;
 
+        const btnSchema = document.getElementById('btn-schema-build');
+        if (btnSchema) {
+            btnSchema.innerText = 'Generate from Schema';
+            btnSchema.disabled = false;
+        }
+
         if (message.error) {
             showToast(`Magic Build failed: ${message.error}`, "error");
         } else if (message.blueprint) {
@@ -337,6 +343,49 @@ document.getElementById('btn-record-macro').addEventListener('click', async () =
     }).catch(err => console.error(err));
 
     chrome.tabs.sendMessage(tab.id, { action: 'TOGGLE_MACRO_RECORDING', isRecording: isRecordingMacro });
+});
+
+// Zero-Shot Schema Build Logic
+document.getElementById('btn-schema-build')?.addEventListener('click', async () => {
+    const btn = document.getElementById('btn-schema-build');
+    const schemaText = document.getElementById('schema-prompt').value;
+    if (!schemaText.trim()) {
+        showToast("Please enter a JSON Schema.", "error");
+        return;
+    }
+
+    try {
+        JSON.parse(schemaText); // Validate JSON
+    } catch(e) {
+        showToast("Invalid JSON Schema format.", "error");
+        return;
+    }
+
+    btn.innerText = 'Generating...';
+    btn.disabled = true;
+
+    const [tab] = await chrome.tabs.query({active: true, currentWindow: true});
+    await chrome.scripting.executeScript({
+        target: { tabId: tab.id },
+        files: ['turndown.js', 'js/content/inspector.js', 'js/content/macros.js', 'js/content/auto-detect.js', 'js/content/extractor.js', 'js/content/dom-tagger.js', 'js/content/main.js']
+    }).catch(err => console.error(err));
+
+    await chrome.tabs.sendMessage(tab.id, { action: 'INJECT_AI_IDS' }).catch(()=>null);
+
+    chrome.tabs.sendMessage(tab.id, { action: 'GET_PAGE_TEXT' }, (response) => {
+        if (chrome.runtime.lastError) return;
+        if (response && response.text) {
+            chrome.runtime.sendMessage({
+                action: 'PROCESS_SCHEMA_BUILD',
+                schema: schemaText,
+                html: response.text
+            });
+        } else {
+            btn.innerText = 'Generate from Schema';
+            btn.disabled = false;
+            showToast("Could not extract text from page to analyze.", "error");
+        }
+    });
 });
 
 // Enhance Prompt Logic

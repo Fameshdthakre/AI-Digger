@@ -75,6 +75,59 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
             chrome.runtime.sendMessage({ action: 'MAGIC_BUILD_RESULT', error: err.message });
         });
         sendResponse({ status: 'building' });
+    } else if (message.action === 'PROCESS_SCHEMA_BUILD') {
+        const truncatedHtml = message.html.substring(0, 15000);
+        const prompt = `${PROMPTS.SCHEMA_BUILDER}\n\nUser Schema: "${message.schema}"\n\nPage HTML:\n"""\n${truncatedHtml}\n"""`;
+        generateSelectorWithAI(prompt).then(async (jsonStr) => {
+            try {
+                const parsedFields = JSON.parse(jsonStr);
+                const [tab] = await chrome.tabs.query({active: true, currentWindow: true});
+
+                const finalFields = [];
+                for (let f of parsedFields) {
+                    let selector = "";
+                    if (f.ai_id) {
+                        const res = await chrome.tabs.sendMessage(tab.id, { action: 'RESOLVE_AI_ID', ai_id: f.ai_id, keepIds: true }).catch(()=>null);
+                        if (res && res.selector) selector = res.selector;
+                    }
+                    if (selector) {
+                        finalFields.push({
+                            name: f.name,
+                            selector: selector,
+                            type: 'css',
+                            extractType: f.extractType || 'text',
+                            multiple: false
+                        });
+                    }
+                }
+
+                // Cleanup IDs when loop finishes
+                await chrome.scripting.executeScript({
+                    target: { tabId: tab.id },
+                    func: () => { if (window.cleanAiIds) window.cleanAiIds(); }
+                }).catch(() => null);
+
+                const blueprint = {
+                    jobName: "Schema Job",
+                    scrapingType: "single-page",
+                    containerSelector: "",
+                    singlePageOptions: {
+                        nextButtonSelector: "",
+                        maxPages: 1,
+                        infiniteScroll: false,
+                        maxScrolls: 0
+                    },
+                    fields: finalFields
+                };
+
+                chrome.runtime.sendMessage({ action: 'MAGIC_BUILD_RESULT', blueprint: blueprint });
+            } catch(e) {
+                chrome.runtime.sendMessage({ action: 'MAGIC_BUILD_RESULT', error: "Failed to parse schema response." });
+            }
+        }).catch(err => {
+            chrome.runtime.sendMessage({ action: 'MAGIC_BUILD_RESULT', error: err.message });
+        });
+        sendResponse({ status: 'building' });
     } else if (message.action === 'PROCESS_AI_INSPECTOR') {
         chrome.storage.sync.get(['aiSettings'], (res) => {
             const settings = res.aiSettings;

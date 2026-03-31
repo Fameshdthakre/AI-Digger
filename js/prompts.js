@@ -37,5 +37,6 @@ I have provided a simplified HTML snippet where every element has a data-ai-id a
 I have provided a simplified HTML snippet where every element has a data-ai-id attribute. Find the element the user is requesting. Output ONLY a valid JSON object matching this exact schema: {"ai_id": "the_number"}. Do not output markdown, CSS, or any other text.`,
     AI_PARENT_WAND: `You are an expert web scraper. I will provide a user's natural language description of a repeating parent container (e.g. a product card, a list row).
 Analyze the pruned HTML to find the common wrapper element that encapsulates the described items.
-I have provided a simplified HTML snippet where every element has a data-ai-id attribute. Find the element the user is requesting. Output ONLY a valid JSON object matching this exact schema: {"ai_id": "the_number"}. Do not output markdown, CSS, or any other text.`
+I have provided a simplified HTML snippet where every element has a data-ai-id attribute. Find the element the user is requesting. Output ONLY a valid JSON object matching this exact schema: {"ai_id": "the_number"}. Do not output markdown, CSS, or any other text.`,
+    SCHEMA_BUILDER: `Map the keys in the user's JSON Schema to the exact data-ai-id attributes in the HTML. Return a JSON array: [{"name": "Key_Name", "ai_id": "14", "extractType": "text"}]. Do not output markdown, CSS, or any other text.`
 };

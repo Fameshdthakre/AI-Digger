@@ -89,7 +89,9 @@ if (window.hasRun) {
                     finalSelector = selectors.length > 0 ? selectors[0].val : null;
                 }
             }
-            if (window.cleanAiIds) window.cleanAiIds();
+            if (!message.keepIds && window.cleanAiIds) {
+                window.cleanAiIds();
+            }
             sendResponse({ selector: finalSelector });
         }
         else if (message.action === 'GET_PAGE_TEXT') {

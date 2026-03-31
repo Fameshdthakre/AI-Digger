@@ -34,6 +34,13 @@
         <!-- BUILD VIEW -->
         <div id="view-build" class="view active">
             <div class="card" style="background: var(--magic-bg); border-color: var(--magic-border);">
+                <label style="color: var(--magic-text);">🚀 Zero-Shot Schema Build</label>
+                <div style="font-size: 11px; color: var(--text-muted); margin-bottom: 8px;">Paste a JSON schema to instantly extract data.</div>
+                <textarea id="schema-prompt" style="font-family: monospace;">{ "Product_Name": "string", "Price": "number" }</textarea>
+                <button id="btn-schema-build" class="btn btn-primary" style="background-color: var(--magic-text); border-color: var(--magic-text); margin-top: 8px;">Generate from Schema</button>
+            </div>
+
+            <div class="card" style="background: var(--magic-bg); border-color: var(--magic-border);">
                 <div style="display: flex; justify-content: space-between; align-items: center;">
                     <label style="color: var(--magic-text); margin:0;">✨ Magic Build (Chat-to-Scrape)</label>
                     <button id="btn-enhance-prompt" class="btn" style="background: transparent; border: 1px solid var(--magic-border); color: var(--magic-text); font-size: 10px; padding: 2px 6px; border-radius: 4px;">🪄 Enhance Prompt</button>
