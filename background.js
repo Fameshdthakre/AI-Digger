@@ -125,9 +125,17 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
                     console.error("Capture failed:", chrome.runtime.lastError.message);
                     sendResponse({ status: 'error', error: chrome.runtime.lastError.message });
                 } else {
-                    console.log("Captured image data URL length:", dataUrl.length);
-                    console.log("Captured element HTML:", message.html);
-                    sendResponse({ status: 'capture_processing', dataUrlLength: dataUrl.length });
+                    // Instantly release the content script so it removes the red box
+                    sendResponse({ status: 'captured' });
+
+                    // Asynchronously generate blueprint
+                    generateVisionBlueprint(message.html, dataUrl)
+                        .then(parsedArray => {
+                            chrome.runtime.sendMessage({ action: 'VISION_BLUEPRINT_RESULT', fields: parsedArray });
+                        })
+                        .catch(err => {
+                            chrome.runtime.sendMessage({ action: 'VISION_BLUEPRINT_ERROR', error: err.message });
+                        });
                 }
             });
         }, 100);
@@ -1613,4 +1621,110 @@ async function generateSelectorWithAI(fullPrompt) {
 
     // Clean markdown fences if AI ignores instructions
     return resultStr.replace(/^```css/i, '').replace(/^```/i, '').replace(/```$/, '').trim();
+}
+
+async function generateVisionBlueprint(htmlSnippet, base64Image) {
+    const settingsObj = await chrome.storage.sync.get(['aiSettings']);
+    const settings = settingsObj.aiSettings;
+
+    if (!settings || !settings.aiPlatform) {
+        throw new Error("AI Platform not configured in settings. Please setup your API keys in the Settings tab.");
+    }
+
+    const prompt = PROMPTS.VISION_BLUEPRINT;
+    let resultJsonStr = "[]";
+
+    if (settings.aiPlatform === 'openai') {
+        const apiKey = settings.openai.key;
+        const model = settings.openai.model || 'gpt-4o';
+        if (!apiKey) throw new Error("OpenAI API key missing.");
+
+        const response = await fetch('https://api.openai.com/v1/chat/completions', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${apiKey}`
+            },
+            body: JSON.stringify({
+                model: model,
+                messages: [{
+                    role: "user",
+                    content: [
+                        { type: "text", text: prompt + "\n\nHTML:\n" + htmlSnippet },
+                        { type: "image_url", image_url: { url: base64Image } }
+                    ]
+                }],
+                temperature: 0.1
+            })
+        });
+
+        if (!response.ok) throw new Error(`OpenAI API error: ${response.statusText}`);
+        const data = await response.json();
+        resultJsonStr = data.choices[0].message.content;
+
+    } else if (settings.aiPlatform === 'gemini') {
+        const apiKey = settings.gemini.key;
+        const model = settings.gemini.model || 'gemini-2.5-flash';
+        if (!apiKey) throw new Error("Gemini API key missing.");
+
+        // Strip data prefix for Gemini
+        const rawBase64 = base64Image.replace(/^data:image\/jpeg;base64,/, "");
+
+        const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                contents: [{
+                    parts: [
+                        { text: prompt + "\n\nHTML:\n" + htmlSnippet },
+                        { inlineData: { mimeType: "image/jpeg", data: rawBase64 } }
+                    ]
+                }]
+            })
+        });
+
+        if (!response.ok) throw new Error(`Gemini API error: ${response.statusText}`);
+        const data = await response.json();
+        resultJsonStr = data.candidates[0].content.parts[0].text;
+
+    } else if (settings.aiPlatform === 'claude') {
+        const apiKey = settings.claude.key;
+        const model = settings.claude.model || 'claude-3-5-sonnet-20241022';
+        if (!apiKey) throw new Error("Claude API key missing.");
+
+        // Strip data prefix for Claude
+        const rawBase64 = base64Image.replace(/^data:image\/jpeg;base64,/, "");
+
+        const response = await fetch('https://api.anthropic.com/v1/messages', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'x-api-key': apiKey,
+                'anthropic-version': '2023-06-01'
+            },
+            body: JSON.stringify({
+                model: model,
+                max_tokens: 1024,
+                messages: [{
+                    role: "user",
+                    content: [
+                        { type: "image", source: { type: "base64", media_type: "image/jpeg", data: rawBase64 } },
+                        { type: "text", text: prompt + "\n\nHTML:\n" + htmlSnippet }
+                    ]
+                }]
+            })
+        });
+
+        if (!response.ok) throw new Error(`Claude API error: ${response.statusText}`);
+        const data = await response.json();
+        resultJsonStr = data.content[0].text;
+    }
+
+    try {
+        const cleanStr = resultJsonStr.replace(/^```json/i, '').replace(/```$/, '').trim();
+        return JSON.parse(cleanStr);
+    } catch (e) {
+        console.error("Failed to parse Vision Blueprint response as JSON", resultJsonStr);
+        throw new Error("AI returned invalid JSON format.");
+    }
 }

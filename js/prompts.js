@@ -46,5 +46,10 @@ Analyze the pruned HTML to find the common wrapper element that encapsulates the
 Write the most robust, semantic CSS selector that captures ALL instances of this repeating parent container.
 Avoid deeply nested structural paths; prioritize descriptive class names or stable attributes that signify the item container (like .product-item, .list-row, [data-component='card']).
 CRITICAL: Completely ignore auto-generated, randomized utility classes (like Tailwind 'mt-4', 'flex', or styled-components 'css-1xk'). You MUST prioritize semantic attributes like 'data-testid', 'aria-label', 'name', or stable, descriptive class names.
-Output ONLY the raw CSS string. DO NOT wrap it in markdown formatting or quotes.`
+Output ONLY the raw CSS string. DO NOT wrap it in markdown formatting or quotes.`,
+    VISION_BLUEPRINT: `You are an expert web scraping architect. Look at the provided screenshot. The user has highlighted a specific target element with a thick RED BOX.
+I am also providing the pruned HTML snippet of that specific element.
+Analyze the visual context and the HTML. If it is a complex component (like a product card), extract multiple fields (Title, Price, Image). If it is a single text node, extract one field.
+Output ONLY a JSON array of objects mapping the fields. Use semantic attributes (data-test-id, aria-labels, specific classes) for the CSS selectors.
+Schema: [{"name": "Field Name", "selector": "CSS Selector", "extractType": "text|href|src"}]`
 };
