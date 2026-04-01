@@ -117,6 +117,21 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
             chrome.runtime.sendMessage({ action: 'AI_SELECTOR_ERROR', fieldId: message.fieldId, error: err.message });
         });
         sendResponse({ status: 'processing' });
+    } else if (message.action === 'CAPTURE_VISION_ELEMENT') {
+        // Wait ~100ms to ensure the red box is rendered
+        setTimeout(() => {
+            chrome.tabs.captureVisibleTab(null, { format: 'jpeg', quality: 50 }, (dataUrl) => {
+                if (chrome.runtime.lastError) {
+                    console.error("Capture failed:", chrome.runtime.lastError.message);
+                    sendResponse({ status: 'error', error: chrome.runtime.lastError.message });
+                } else {
+                    console.log("Captured image data URL length:", dataUrl.length);
+                    console.log("Captured element HTML:", message.html);
+                    sendResponse({ status: 'capture_processing', dataUrlLength: dataUrl.length });
+                }
+            });
+        }, 100);
+        return true; // Keep message channel open for async response
     }
     return true; // Keep message channel open for async responses
 });
