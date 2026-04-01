@@ -49,7 +49,7 @@ document.addEventListener('click', async (e) => {
         const [tab] = await chrome.tabs.query({active: true, currentWindow: true});
         await chrome.scripting.executeScript({
             target: { tabId: tab.id },
-            files: ['turndown.js', 'js/content/inspector.js', 'js/content/macros.js', 'js/content/auto-detect.js', 'js/content/extractor.js', 'js/content/main.js']
+            files: ['turndown.js', 'js/content/inspector.js', 'js/content/live-ai-inspector.js', 'js/content/macros.js', 'js/content/auto-detect.js', 'js/content/extractor.js', 'js/content/main.js']
         }).catch(err => console.error("Failed to inject content scripts:", err));
 
         chrome.tabs.sendMessage(tab.id, { action: 'START_INSPECTOR_FOR_FIELD', fieldId: fieldId, mode: 'parent' }, (response) => {
@@ -289,6 +289,30 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
             }
         }
         sendResponse({ status: 'received' });
+    } else if (message.action === 'VISION_BLUEPRINT_RESULT') {
+        const btn = document.getElementById('btn-live-vision');
+        if (btn) {
+            btn.innerText = '👁️ Live AI Vision';
+            btn.disabled = false;
+        }
+
+        if (message.fields && message.fields.length > 0) {
+            message.fields.forEach(f => {
+                addFieldRow(f.name || 'Vision Field', f.selector || '', 'css', f.extractType || 'text');
+            });
+            showToast("Vision Blueprint generated successfully!", "success");
+        } else {
+            showToast("No fields detected in the selected area.", "info");
+        }
+        sendResponse({ status: 'received' });
+    } else if (message.action === 'VISION_BLUEPRINT_ERROR') {
+        const btn = document.getElementById('btn-live-vision');
+        if (btn) {
+            btn.innerText = '👁️ Live AI Vision';
+            btn.disabled = false;
+        }
+        showToast(`Live Vision Error: ${message.error}`, "error");
+        sendResponse({ status: 'received' });
     }
     return true;
 });
@@ -302,13 +326,33 @@ document.getElementById('btn-auto-detect').addEventListener('click', async () =>
     const [tab] = await chrome.tabs.query({active: true, currentWindow: true});
     await chrome.scripting.executeScript({
         target: { tabId: tab.id },
-        files: ['turndown.js', 'js/content/inspector.js', 'js/content/macros.js', 'js/content/auto-detect.js', 'js/content/extractor.js', 'js/content/main.js']
+        files: ['turndown.js', 'js/content/inspector.js', 'js/content/live-ai-inspector.js', 'js/content/macros.js', 'js/content/auto-detect.js', 'js/content/extractor.js', 'js/content/main.js']
     }).catch(err => console.error(err));
 
     chrome.tabs.sendMessage(tab.id, { action: 'START_AUTO_DETECT' }, (response) => {
         if (chrome.runtime.lastError) return;
         if (!response || response.status !== 'started') {
             btn.innerText = '🎯 Smart Container Scan';
+            btn.disabled = false;
+        }
+    });
+});
+
+// Live AI Vision Logic
+document.getElementById('btn-live-vision').addEventListener('click', async () => {
+    const btn = document.getElementById('btn-live-vision');
+    btn.innerText = 'Select an element...';
+    btn.disabled = true;
+
+    const [tab] = await chrome.tabs.query({active: true, currentWindow: true});
+    await chrome.scripting.executeScript({
+        target: { tabId: tab.id },
+        files: ['turndown.js', 'js/content/inspector.js', 'js/content/live-ai-inspector.js', 'js/content/macros.js', 'js/content/auto-detect.js', 'js/content/extractor.js', 'js/content/main.js']
+    }).catch(err => console.error(err));
+
+    chrome.tabs.sendMessage(tab.id, { action: 'START_LIVE_AI_MODE' }, (response) => {
+        if (chrome.runtime.lastError) {
+            btn.innerText = '👁️ Live AI Vision';
             btn.disabled = false;
         }
     });
@@ -331,7 +375,7 @@ document.getElementById('btn-record-macro').addEventListener('click', async () =
     const [tab] = await chrome.tabs.query({active: true, currentWindow: true});
     await chrome.scripting.executeScript({
         target: { tabId: tab.id },
-        files: ['turndown.js', 'js/content/inspector.js', 'js/content/macros.js', 'js/content/auto-detect.js', 'js/content/extractor.js', 'js/content/main.js']
+        files: ['turndown.js', 'js/content/inspector.js', 'js/content/live-ai-inspector.js', 'js/content/macros.js', 'js/content/auto-detect.js', 'js/content/extractor.js', 'js/content/main.js']
     }).catch(err => console.error(err));
 
     chrome.tabs.sendMessage(tab.id, { action: 'TOGGLE_MACRO_RECORDING', isRecording: isRecordingMacro });
@@ -370,7 +414,7 @@ document.getElementById('btn-generate-blueprint').addEventListener('click', asyn
     const [tab] = await chrome.tabs.query({active: true, currentWindow: true});
     await chrome.scripting.executeScript({
         target: { tabId: tab.id },
-        files: ['turndown.js', 'js/content/inspector.js', 'js/content/macros.js', 'js/content/auto-detect.js', 'js/content/extractor.js', 'js/content/main.js']
+        files: ['turndown.js', 'js/content/inspector.js', 'js/content/live-ai-inspector.js', 'js/content/macros.js', 'js/content/auto-detect.js', 'js/content/extractor.js', 'js/content/main.js']
     }).catch(err => console.error(err));
 
     chrome.tabs.sendMessage(tab.id, { action: 'GET_PAGE_TEXT' }, (response) => {
