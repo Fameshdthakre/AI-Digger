@@ -298,7 +298,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
 
         if (message.fields && message.fields.length > 0) {
             message.fields.forEach(f => {
-                addFieldRow(f.name || 'Vision Field', f.selector || '', 'css', f.extractType || 'text');
+                addFieldRow(f.name || 'Vision Field', f.selector || '', f.type || 'css', f.extractType || 'text');
             });
             showToast("Vision Blueprint generated successfully!", "success");
         } else {
