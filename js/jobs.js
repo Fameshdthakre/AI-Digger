@@ -179,7 +179,8 @@ function getBlueprintFromUI() {
             extractType: row.querySelector('.f-extract-target').value,
             attributeName: row.querySelector('.f-attr-name').value,
             multiple: row.querySelector('.f-multiple') ? row.querySelector('.f-multiple').checked : false,
-            format: row.querySelector('.f-format') ? row.querySelector('.f-format').value : 'raw'
+            format: row.querySelector('.f-format') ? row.querySelector('.f-format').value : 'raw',
+            aiHeal: row.querySelector('.f-heal') ? row.querySelector('.f-heal').checked : true
         })).filter(f => f.name && f.selector),
         antiBot: {
             stealthMode: document.getElementById('enable-stealth-mode').checked,
@@ -370,7 +371,7 @@ document.getElementById('saved-jobs-select').addEventListener('change', (e) => {
     fieldCount = 0;
     if (blueprint.fields && blueprint.fields.length > 0) {
         blueprint.fields.forEach(f => {
-            addFieldRow(f.name, f.selector, f.type, f.extractType, f.attributeName, f.format || 'raw');
+            addFieldRow(f.name, f.selector, f.type, f.extractType, f.attributeName, f.format || 'raw', f.aiHeal !== false);
             // Need to set the multiple checkbox manually as addFieldRow doesn't accept it
             const newRow = fieldsContainer.lastElementChild;
             const cb = newRow.querySelector('.f-multiple');

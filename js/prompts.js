@@ -24,10 +24,12 @@ Output ONLY a valid JSON object matching this exact schema:
             "type": "css|xpath",
             "extractType": "text" | "href" | "src" | "attribute",
             "attributeName": "If extractType is attribute, put name here",
-            "multiple": false
+            "multiple": false,
+            "aiHeal": true
         }
     ]
-}`,
+}
+Set aiHeal to false for fields that are likely optional or frequently missing (like discounts, ratings, or secondary badges). Set it to true for mandatory core fields (like Title, Main Price, or Image).`,
     ANALYZE_PAGE: `You are an expert web scraping architect. Analyze the provided webpage text content.
 Determine the page archetype (e.g., E-commerce grid, Vendor Listing, Article) and identify the optimal data fields a user would want to extract.
 For each field, write a clear, precise AI extraction prompt (e.g., "What is the price of the item?").`,
@@ -62,5 +64,6 @@ CRITICAL CSS RULES:
 3. If you absolutely MUST match specific text to find an element, you must output a valid XPath string instead (starting with //) and set the type to 'xpath'.
 
 Output ONLY a JSON array of objects mapping the fields.
-Schema: [{"name": "Field Name", "selector": "CSS Selector or XPath", "type": "css|xpath", "extractType": "text|href|src"}]`
+Schema: [{"name": "Field Name", "selector": "CSS Selector or XPath", "type": "css|xpath", "extractType": "text|href|src", "aiHeal": true}]
+Set aiHeal to false for fields that are likely optional or frequently missing (like discounts, ratings, or secondary badges). Set it to true for mandatory core fields (like Title, Main Price, or Image).`
 };

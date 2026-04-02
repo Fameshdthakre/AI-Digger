@@ -391,7 +391,7 @@ document.getElementById('inspect-next-btn').addEventListener('click', async () =
 });
 
 // Dynamic Field Management
-function addFieldRow(name = '', selector = '', type = 'css', extractType = 'text', attrName = '', format = 'raw') {
+function addFieldRow(name = '', selector = '', type = 'css', extractType = 'text', attrName = '', format = 'raw', aiHeal = true) {
     fieldCount++;
     const fieldId = `field_${Date.now()}_${fieldCount}`; // Unique ID for inspector mapping
     const div = document.createElement('div');
@@ -436,6 +436,9 @@ function addFieldRow(name = '', selector = '', type = 'css', extractType = 'text
             <input type="text" placeholder="CSS Selector, XPath, or AI Prompt" class="f-selector" value="${selector}" style="flex: 1;" />
             <label class="checkbox-label" style="width: auto; flex-shrink: 0; margin-left: auto; ${type === 'ai' ? 'display: none;' : ''}">
                 <input type="checkbox" class="f-multiple" title="Extract an Array of multiple items" /> Array
+            </label>
+            <label class="checkbox-label" style="width: auto; flex-shrink: 0; margin-left: 4px; ${type === 'ai' ? 'display: none;' : ''}" title="If the element is missing, ask AI to fix the selector instead of leaving it empty.">
+                <input type="checkbox" class="f-heal" ${aiHeal ? 'checked' : ''} /> AI Heal
             </label>
         </div>
         <div class="preview-box"></div>

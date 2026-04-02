@@ -185,7 +185,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
                 fieldsContainer.innerHTML = '';
                 fieldCount = 0;
                 bp.fields.forEach(f => {
-                    addFieldRow(f.name, f.selector, f.type || 'css', f.extractType || 'text', f.attributeName || '', f.format || 'raw');
+                    addFieldRow(f.name, f.selector, f.type || 'css', f.extractType || 'text', f.attributeName || '', f.format || 'raw', f.aiHeal !== false);
                     const newRow = fieldsContainer.lastElementChild;
                     const cb = newRow.querySelector('.f-multiple');
                     if (cb) cb.checked = f.multiple || false;
@@ -298,7 +298,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
 
         if (message.fields && message.fields.length > 0) {
             message.fields.forEach(f => {
-                addFieldRow(f.name || 'Vision Field', f.selector || '', f.type || 'css', f.extractType || 'text');
+                addFieldRow(f.name || 'Vision Field', f.selector || '', f.type || 'css', f.extractType || 'text', '', 'raw', f.aiHeal !== false);
             });
             showToast("Vision Blueprint generated successfully!", "success");
         } else {
