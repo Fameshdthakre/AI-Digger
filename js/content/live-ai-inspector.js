@@ -7,7 +7,8 @@ if (typeof window.liveAiInspectorInitialized === 'undefined') {
   window.liveAiState = {
     isActive: false,
     hoveredElement: null,
-    originalOutline: null
+    originalOutline: null,
+    currentFieldId: null
   };
 
   window.liveAiMouseOver = function(e) {
@@ -66,7 +67,8 @@ if (typeof window.liveAiInspectorInitialized === 'undefined') {
     // Send to background to capture
     chrome.runtime.sendMessage({
       action: 'CAPTURE_VISION_ELEMENT',
-      html: truncatedHtml
+      html: truncatedHtml,
+      fieldId: window.liveAiState.currentFieldId
     }, (response) => {
       // Background responds when capture is done
       if (chrome.runtime.lastError) {
@@ -79,9 +81,10 @@ if (typeof window.liveAiInspectorInitialized === 'undefined') {
     });
   };
 
-  window.activateLiveAiMode = function() {
+  window.activateLiveAiMode = function(fieldId = null) {
     if (window.liveAiState.isActive) return;
     window.liveAiState.isActive = true;
+    window.liveAiState.currentFieldId = fieldId;
 
     document.addEventListener('mouseover', window.liveAiMouseOver, true);
     document.addEventListener('mouseout', window.liveAiMouseOut, true);
@@ -110,7 +113,7 @@ if (typeof window.liveAiInspectorInitialized === 'undefined') {
   // Listen for activation from UI
   chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     if (message.action === 'START_LIVE_AI_MODE') {
-      window.activateLiveAiMode();
+      window.activateLiveAiMode(message.fieldId);
       sendResponse({ status: 'live_ai_mode_started' });
     } else if (message.action === 'STOP_LIVE_AI_MODE') {
       window.deactivateLiveAiMode();

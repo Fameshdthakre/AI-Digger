@@ -65,5 +65,16 @@ CRITICAL CSS RULES:
 
 Output ONLY a JSON array of objects mapping the fields.
 Schema: [{"name": "Field Name", "selector": "CSS Selector or XPath", "type": "css|xpath", "extractType": "text|href|src", "aiHeal": true}]
-Set aiHeal to false for fields that are likely optional or frequently missing (like discounts, ratings, or secondary badges). Set it to true for mandatory core fields (like Title, Main Price, or Image).`
+Set aiHeal to false for fields that are likely optional or frequently missing (like discounts, ratings, or secondary badges). Set it to true for mandatory core fields (like Title, Main Price, or Image).`,
+    VISION_SINGLE_SELECTOR: `You are an expert web scraping architect. Look at the provided screenshot. The user has highlighted a specific target element with a thick RED BOX.
+I am also providing the pruned HTML snippet of that specific element.
+Generate the most robust, semantic selector to target this specific element (or repeating elements of this type if it is a container).
+
+CRITICAL CSS RULES:
+1. You MUST generate STRICT, native CSS3 selectors compatible with document.querySelector().
+2. DO NOT hallucinate jQuery extensions like :contains(), :parent, or :eq().
+3. If you absolutely MUST match specific text to find an element, output a valid XPath string instead (starting with //) and set the type to 'xpath'.
+
+Output ONLY a JSON object.
+Schema: {"selector": "CSS Selector or XPath", "type": "css|xpath"}`
 };
