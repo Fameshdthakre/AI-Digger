@@ -121,10 +121,7 @@
                 </summary>
                 <div style="font-size: 11px; color: var(--text-muted); margin-bottom: 8px;">If scraping a list/grid, enter the selector for the repeating item card. The data fields below will be extracted relative to this container.</div>
                 <div style="display: flex; gap: 8px;" id="item-container-selector-row">
-                    <div style="display: flex; flex-shrink: 0;">
-                        <button class="btn-wand inspect-btn" id="wand-item-container-btn" title="Describe to AI" style="flex-shrink: 0; padding: 4px 8px; font-size: 14px; background: transparent; border: 1px solid var(--border); border-radius: 4px; border-top-right-radius: 0; border-bottom-right-radius: 0; cursor: pointer; border-right: none;">🪄</button>
-                        <button class="btn-parent-wand" title="Find Parent Container with AI" style="flex-shrink: 0; padding: 4px 8px; font-size: 14px; background: transparent; border: 1px solid var(--border); border-radius: 4px; border-top-left-radius: 0; border-bottom-left-radius: 0; cursor: pointer; margin-right: 8px;">📦</button>
-                    </div>
+                    <button class="btn-vision" title="Live AI Vision" style="padding: 0 8px; border-radius: 4px; font-size: 14px; background: transparent; border: 1px solid var(--border); cursor: pointer; flex-shrink: 0;">👁️</button>
                     <button class="inspect-btn" id="inspect-container-btn" title="Inspect Container" style="flex-shrink: 0;">🔍</button>
                     <button class="test-btn" id="test-container-btn" title="Test Container" style="flex-shrink: 0;">🧪</button>
                     <input type="text" id="item-container-selector" placeholder="CSS or XPath for repeating Item Container (e.g. .product-card)" style="margin-bottom: 0; flex: 1;" />
@@ -141,7 +138,6 @@
                 <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
                     <label style="margin: 0;">Data Fields to Extract</label>
                     <div style="display: flex; gap: 8px;">
-                        <button id="btn-auto-detect" class="btn btn-primary" style="width: auto; padding: 6px 12px; font-size: 11px; background-color: #8b5cf6; border-color: #8b5cf6;" title="Click a repeating container to extract fields locally without AI">🎯 Smart Container Scan</button>
                         <button id="btn-live-vision" class="btn btn-primary" style="width: auto; padding: 6px 12px; font-size: 11px; background-color: #ec4899; border-color: #ec4899;">👁️ Live AI Vision</button>
                     </div>
                 </div>
@@ -161,7 +157,7 @@
                     <div style="flex: 2;">
                         <label>Pagination 'Next' Button</label>
                         <div style="display: flex; gap: 8px;">
-                            <button class="btn-wand inspect-btn" id="wand-next-button-btn" title="Describe to AI" style="padding: 0 8px; border-radius: 4px; font-size: 14px; background: transparent; border: 1px solid var(--border); cursor: pointer;">🪄</button>
+                            <button class="btn-vision" title="Live AI Vision" style="padding: 0 8px; border-radius: 4px; font-size: 14px; background: transparent; border: 1px solid var(--border); cursor: pointer; flex-shrink: 0;">👁️</button>
                             <button class="inspect-btn" id="inspect-next-btn" title="Inspect Next Button" style="flex-shrink: 0;">🔍</button>
                             <button class="test-btn" id="test-next-btn" title="Test Next Button" style="flex-shrink: 0;">🧪</button>
                             <input type="text" id="next-button-selector" placeholder="CSS or XPath for Next button" style="flex: 1;" />
@@ -186,7 +182,7 @@
                         <input type="number" id="max-scrolls" value="5" min="1" style="width: 60px;" />
                     </div>
                     <div style="display: flex; gap: 8px; align-items: center;">
-                        <button class="btn-wand inspect-btn" id="wand-scroll-container-btn" title="Describe to AI" style="padding: 0 8px; border-radius: 4px; font-size: 14px; background: transparent; border: 1px solid var(--border); cursor: pointer;">🪄</button>
+                        <button class="btn-vision" title="Live AI Vision" style="padding: 0 8px; border-radius: 4px; font-size: 14px; background: transparent; border: 1px solid var(--border); cursor: pointer; flex-shrink: 0;">👁️</button>
                         <button class="inspect-btn" id="inspect-scroll-container-btn" title="Inspect Scroll Container" style="flex-shrink: 0;">🔍</button>
                         <button class="test-btn" id="test-scroll-container-btn" title="Test Scroll Container" style="flex-shrink: 0;">🧪</button>
                         <input type="text" id="scroll-container-selector" placeholder="Target Scroll Box (Optional)" title="If the page has a specific scrolling box, enter its CSS selector here. Leave blank for whole page." style="flex: 1; margin-bottom: 0;" />

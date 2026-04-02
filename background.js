@@ -99,24 +99,6 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
             });
         });
         sendResponse({ status: 'processing' });
-    } else if (message.action === 'PROCESS_AI_WAND') {
-        const truncatedHtml = message.html.substring(0, 15000);
-        const prompt = `${PROMPTS.AI_WAND}\n\nUser Request: "${message.query}"\n\nPage HTML:\n"""\n${truncatedHtml}\n"""`;
-        generateSelectorWithAI(prompt).then(selector => {
-            chrome.runtime.sendMessage({ action: 'AI_SELECTOR_RESULT', fieldId: message.fieldId, selector: selector });
-        }).catch(err => {
-            chrome.runtime.sendMessage({ action: 'AI_SELECTOR_ERROR', fieldId: message.fieldId, error: err.message });
-        });
-        sendResponse({ status: 'processing' });
-    } else if (message.action === 'PROCESS_AI_PARENT_WAND') {
-        const truncatedHtml = message.html.substring(0, 15000);
-        const prompt = `${PROMPTS.AI_PARENT_WAND}\n\nUser Request: "${message.query}"\n\nPage HTML:\n"""\n${truncatedHtml}\n"""`;
-        generateSelectorWithAI(prompt).then(selector => {
-            chrome.runtime.sendMessage({ action: 'AI_SELECTOR_RESULT', fieldId: message.fieldId, selector: selector });
-        }).catch(err => {
-            chrome.runtime.sendMessage({ action: 'AI_SELECTOR_ERROR', fieldId: message.fieldId, error: err.message });
-        });
-        sendResponse({ status: 'processing' });
     } else if (message.action === 'CAPTURE_VISION_ELEMENT') {
         // Wait ~100ms to ensure the red box is rendered
         setTimeout(() => {
