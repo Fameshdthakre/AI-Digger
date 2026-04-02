@@ -128,14 +128,25 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
                     // Instantly release the content script so it removes the red box
                     sendResponse({ status: 'captured' });
 
-                    // Asynchronously generate blueprint
-                    generateVisionBlueprint(message.html, dataUrl)
-                        .then(parsedArray => {
-                            chrome.runtime.sendMessage({ action: 'VISION_BLUEPRINT_RESULT', fields: parsedArray });
-                        })
-                        .catch(err => {
-                            chrome.runtime.sendMessage({ action: 'VISION_BLUEPRINT_ERROR', error: err.message });
-                        });
+                    if (message.fieldId) {
+                        // Asynchronously generate a single robust selector
+                        generateVisionSingleSelector(message.html, dataUrl)
+                            .then(parsed => {
+                                chrome.runtime.sendMessage({ action: 'VISION_SINGLE_SELECTOR_RESULT', fieldId: message.fieldId, selector: parsed.selector, type: parsed.type });
+                            })
+                            .catch(err => {
+                                chrome.runtime.sendMessage({ action: 'VISION_SINGLE_SELECTOR_ERROR', fieldId: message.fieldId, error: err.message });
+                            });
+                    } else {
+                        // Asynchronously generate blueprint array
+                        generateVisionBlueprint(message.html, dataUrl)
+                            .then(parsedArray => {
+                                chrome.runtime.sendMessage({ action: 'VISION_BLUEPRINT_RESULT', fields: parsedArray });
+                            })
+                            .catch(err => {
+                                chrome.runtime.sendMessage({ action: 'VISION_BLUEPRINT_ERROR', error: err.message });
+                            });
+                    }
                 }
             });
         }, 100);
@@ -1338,6 +1349,110 @@ async function analyzePageWithAI(text) {
         return Array.isArray(parsed) ? parsed : [];
     } catch (e) {
         console.error("Failed to parse AI Analyze response as JSON", resultJsonStr);
+        throw new Error("AI returned invalid JSON format.");
+    }
+}
+
+async function generateVisionSingleSelector(htmlSnippet, base64Image) {
+    const settingsObj = await chrome.storage.sync.get(['aiSettings']);
+    const settings = settingsObj.aiSettings;
+
+    if (!settings || !settings.aiPlatform) {
+        throw new Error("AI Platform not configured in settings.");
+    }
+
+    const prompt = PROMPTS.VISION_SINGLE_SELECTOR;
+    let resultJsonStr = "{}";
+
+    if (settings.aiPlatform === 'openai') {
+        const apiKey = settings.openai.key;
+        const model = settings.openai.model || 'gpt-4o';
+        if (!apiKey) throw new Error("OpenAI API key missing.");
+
+        const response = await fetch('https://api.openai.com/v1/chat/completions', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${apiKey}`
+            },
+            body: JSON.stringify({
+                model: model,
+                messages: [{
+                    role: "user",
+                    content: [
+                        { type: "text", text: prompt + "\n\nHTML:\n" + htmlSnippet },
+                        { type: "image_url", image_url: { url: base64Image } }
+                    ]
+                }],
+                temperature: 0.1
+            })
+        });
+
+        if (!response.ok) throw new Error(`OpenAI API error: ${response.statusText}`);
+        const data = await response.json();
+        resultJsonStr = data.choices[0].message.content;
+
+    } else if (settings.aiPlatform === 'gemini') {
+        const apiKey = settings.gemini.key;
+        const model = settings.gemini.model || 'gemini-2.5-flash';
+        if (!apiKey) throw new Error("Gemini API key missing.");
+
+        const rawBase64 = base64Image.replace(/^data:image\/jpeg;base64,/, "");
+
+        const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                contents: [{
+                    parts: [
+                        { text: prompt + "\n\nHTML:\n" + htmlSnippet },
+                        { inlineData: { mimeType: "image/jpeg", data: rawBase64 } }
+                    ]
+                }]
+            })
+        });
+
+        if (!response.ok) throw new Error(`Gemini API error: ${response.statusText}`);
+        const data = await response.json();
+        resultJsonStr = data.candidates[0].content.parts[0].text;
+
+    } else if (settings.aiPlatform === 'claude') {
+        const apiKey = settings.claude.key;
+        const model = settings.claude.model || 'claude-3-5-sonnet-20241022';
+        if (!apiKey) throw new Error("Claude API key missing.");
+
+        const rawBase64 = base64Image.replace(/^data:image\/jpeg;base64,/, "");
+
+        const response = await fetch('https://api.anthropic.com/v1/messages', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'x-api-key': apiKey,
+                'anthropic-version': '2023-06-01'
+            },
+            body: JSON.stringify({
+                model: model,
+                max_tokens: 1024,
+                messages: [{
+                    role: "user",
+                    content: [
+                        { type: "image", source: { type: "base64", media_type: "image/jpeg", data: rawBase64 } },
+                        { type: "text", text: prompt + "\n\nHTML:\n" + htmlSnippet }
+                    ]
+                }]
+            })
+        });
+
+        if (!response.ok) throw new Error(`Claude API error: ${response.statusText}`);
+        const data = await response.json();
+        resultJsonStr = data.content[0].text;
+    }
+
+    try {
+        const cleanStr = resultJsonStr.replace(/^```json/i, '').replace(/```$/, '').trim();
+        return JSON.parse(cleanStr);
+    } catch (e) {
+        console.error("Failed to parse Vision Single Selector response as JSON", resultJsonStr);
         throw new Error("AI returned invalid JSON format.");
     }
 }
