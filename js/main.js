@@ -1,68 +1,5 @@
 // === Execution & Glue Logic ===
 
-// Global Listener for Wand Clicks
-document.addEventListener('click', async (e) => {
-    if (e.target.closest('.btn-wand')) {
-        const wandBtn = e.target.closest('.btn-wand');
-        let fieldId;
-
-        if (wandBtn.id === 'wand-item-container-btn') fieldId = 'item-container-selector';
-        else if (wandBtn.id === 'wand-next-button-btn') fieldId = 'next-button-selector';
-        else if (wandBtn.id === 'wand-scroll-container-btn') fieldId = 'scroll-container-selector';
-        else {
-            const row = wandBtn.closest('.field-row');
-            if (!row) return;
-            fieldId = row.id;
-        }
-
-        if (!fieldId) return;
-
-        const query = prompt("What element do you want to find here? (e.g., 'The main product container' or 'The next page button')");
-        if (!query) return;
-
-        wandBtn.innerText = '⏳';
-        const [tab] = await chrome.tabs.query({active: true, currentWindow: true});
-        await chrome.scripting.executeScript({ target: { tabId: tab.id }, files: ['js/content/main.js'] }).catch(()=>null);
-
-        chrome.tabs.sendMessage(tab.id, { action: 'GET_PAGE_TEXT' }, (response) => {
-            if (chrome.runtime.lastError) return;
-            if (response && response.text) {
-                chrome.runtime.sendMessage({ action: 'PROCESS_AI_WAND', fieldId, query, html: response.text });
-            } else {
-                wandBtn.innerText = '🪄';
-                showToast("Could not read page.", "error");
-            }
-        });
-    } else if (e.target.closest('.btn-parent-wand')) {
-        // Start visual inspector in parent mode
-        const wandBtn = e.target.closest('.btn-parent-wand');
-        let fieldId = null;
-        const row = wandBtn.closest('.field-row');
-        if (row) {
-            fieldId = row.id;
-        } else if (wandBtn.closest('#item-container-selector-row')) {
-            fieldId = 'item-container-selector';
-        }
-
-        if (!fieldId) return;
-
-        const [tab] = await chrome.tabs.query({active: true, currentWindow: true});
-        await chrome.scripting.executeScript({
-            target: { tabId: tab.id },
-            files: ['turndown.js', 'js/content/inspector.js', 'js/content/live-ai-inspector.js', 'js/content/macros.js', 'js/content/auto-detect.js', 'js/content/extractor.js', 'js/content/main.js']
-        }).catch(err => console.error("Failed to inject content scripts:", err));
-
-        chrome.tabs.sendMessage(tab.id, { action: 'START_INSPECTOR_FOR_FIELD', fieldId: fieldId, mode: 'parent' }, (response) => {
-            if (chrome.runtime.lastError) return;
-            if (response && response.status === 'inspector_started') {
-                wandBtn.style.backgroundColor = 'var(--magic-bg)';
-                wandBtn.style.borderColor = 'var(--magic-border)';
-                wandBtn.innerText = '🎯';
-            }
-        });
-    }
-});
-
 // Unified Message Listener
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     if (message.action === 'INSPECTOR_RESULT') {
@@ -129,22 +66,6 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
             }
         }
         sendResponse({ status: 'received' });
-    } else if (message.action === 'AUTO_DETECT_RESULT') {
-        const btn = document.getElementById('btn-auto-detect');
-        btn.innerText = '🎯 Smart Container Scan';
-        btn.disabled = false;
-
-        if (message.fields && message.fields.length > 0) {
-            fieldsContainer.innerHTML = '';
-            fieldCount = 0;
-            message.fields.forEach(f => {
-                addFieldRow(f.name, f.selector, 'css', f.extractType || 'text');
-                const newRow = fieldsContainer.lastElementChild;
-                const cb = newRow.querySelector('.f-multiple');
-                if (cb) cb.checked = true; // Auto-detect implies arrays
-            });
-        }
-        sendResponse({ status: 'received' });
     } else if (message.action === 'MAGIC_BUILD_RESULT') {
         const btn = document.getElementById('btn-generate-blueprint');
         btn.innerText = 'Generate Blueprint';
@@ -209,62 +130,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
             sendResponse({ status: 'received' });
             return true;
         }
-
-        let selectorInput, wandBtn, testBtn, inspectBtn, parentWandBtn;
-
-        if (message.fieldId === 'item-container-selector' || message.fieldId === 'next-button-selector' || message.fieldId === 'scroll-container-selector') {
-            selectorInput = document.getElementById(message.fieldId);
-            const prefix = message.fieldId.replace('-selector', '');
-            wandBtn = document.getElementById(`wand-${prefix}-btn`);
-            testBtn = document.getElementById(`test-${prefix}-btn`);
-            inspectBtn = document.getElementById(`inspect-${prefix}-btn`) || document.getElementById(`inspect-container-btn`);
-
-            if (message.fieldId === 'item-container-selector') {
-                const rowEl = document.getElementById('item-container-selector-row');
-                if (rowEl) parentWandBtn = rowEl.querySelector('.btn-parent-wand');
-            }
-        } else {
-            const row = document.getElementById(message.fieldId);
-            if (row) {
-                selectorInput = row.querySelector('.f-selector') || row.querySelector('.a-selector');
-                wandBtn = row.querySelector('.btn-wand');
-                testBtn = row.querySelector('.test-btn') || row.querySelector('.a-test');
-                inspectBtn = row.querySelector('.inspect-btn') || row.querySelector('.a-inspect');
-                parentWandBtn = row.querySelector('.btn-parent-wand');
-            }
-        }
-
-        if (selectorInput) {
-            selectorInput.value = message.selector;
-            selectorInput.dispatchEvent(new Event('input')); // Trigger visual UI updates & safeguards
-        }
-        if (wandBtn) wandBtn.innerText = '🪄';
-        if (parentWandBtn) parentWandBtn.innerText = '📦';
-        if (inspectBtn) {
-            inspectBtn.style.backgroundColor = 'var(--surface)';
-            inspectBtn.style.borderColor = 'var(--border)';
-            inspectBtn.innerText = '🔍';
-        }
-
-        if (testBtn) testBtn.click(); // Auto-test the new AI selector
-        showToast("AI generated selector!", "success");
-        sendResponse({ status: 'received' });
     } else if (message.action === 'AI_SELECTOR_ERROR') {
-        let row = document.getElementById(message.fieldId);
-        if (message.fieldId === 'item-container-selector') {
-            const rowEl = document.getElementById('item-container-selector-row');
-            if (rowEl) {
-                const wandBtn = rowEl.querySelector('.btn-wand');
-                const parentWandBtn = rowEl.querySelector('.btn-parent-wand');
-                if (wandBtn) wandBtn.innerText = '🪄';
-                if (parentWandBtn) parentWandBtn.innerText = '📦';
-            }
-        } else if (row) {
-            const wandBtn = row.querySelector('.btn-wand');
-            const parentWandBtn = row.querySelector('.btn-parent-wand');
-            if (wandBtn) wandBtn.innerText = '🪄';
-            if (parentWandBtn) parentWandBtn.innerText = '📦';
-        }
         showToast(`AI Error: ${message.error}`, "error");
         sendResponse({ status: 'received' });
     } else if (message.action === 'INSPECTOR_CANCELLED') {
@@ -313,29 +179,95 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         }
         showToast(`Live Vision Error: ${message.error}`, "error");
         sendResponse({ status: 'received' });
+    } else if (message.action === 'VISION_SINGLE_SELECTOR_RESULT') {
+        const btn = document.querySelector(`.btn-vision[data-field-id="${message.fieldId}"]`) || document.querySelector(`#${message.fieldId}-row .btn-vision`) || document.querySelector(`#${message.fieldId} .btn-vision`) || Array.from(document.querySelectorAll('.btn-vision')).find(b => {
+            const row = b.closest('.field-row');
+            return row && row.id === message.fieldId;
+        });
+
+        if (btn) {
+            btn.innerText = '👁️';
+            btn.disabled = false;
+        } else {
+            // Fallback to reset all loading vision buttons if specific one not found
+            document.querySelectorAll('.btn-vision').forEach(b => {
+                if (b.innerText === '⏳') {
+                    b.innerText = '👁️';
+                    b.disabled = false;
+                }
+            });
+        }
+
+        let selectorInput, testBtn;
+
+        if (message.fieldId === 'item-container-selector' || message.fieldId === 'next-button-selector' || message.fieldId === 'scroll-container-selector') {
+            selectorInput = document.getElementById(message.fieldId);
+            const prefix = message.fieldId.replace('-selector', '');
+            testBtn = document.getElementById(`test-${prefix}-btn`);
+        } else {
+            const row = document.getElementById(message.fieldId);
+            if (row) {
+                selectorInput = row.querySelector('.f-selector') || row.querySelector('.a-selector');
+                testBtn = row.querySelector('.test-btn') || row.querySelector('.a-test');
+            }
+        }
+
+        if (selectorInput) {
+            selectorInput.value = message.selector;
+            selectorInput.dispatchEvent(new Event('input')); // Trigger UI safeguards
+        }
+
+        if (testBtn) testBtn.click(); // Auto-test the new AI selector
+        showToast("Live AI Vision selector generated!", "success");
+        sendResponse({ status: 'received' });
     }
     return true;
 });
 
-// Auto-Detect Logic
-document.getElementById('btn-auto-detect').addEventListener('click', async () => {
-    const btn = document.getElementById('btn-auto-detect');
-    btn.innerText = 'Scanning...';
-    btn.disabled = true;
+// Inline Live AI Vision Listener (Precision Generation)
+document.addEventListener('click', async (e) => {
+    if (e.target.closest('.btn-vision')) {
+        const visionBtn = e.target.closest('.btn-vision');
+        let fieldId;
 
-    const [tab] = await chrome.tabs.query({active: true, currentWindow: true});
-    await chrome.scripting.executeScript({
-        target: { tabId: tab.id },
-        files: ['turndown.js', 'js/content/inspector.js', 'js/content/live-ai-inspector.js', 'js/content/macros.js', 'js/content/auto-detect.js', 'js/content/extractor.js', 'js/content/main.js']
-    }).catch(err => console.error(err));
-
-    chrome.tabs.sendMessage(tab.id, { action: 'START_AUTO_DETECT' }, (response) => {
-        if (chrome.runtime.lastError) return;
-        if (!response || response.status !== 'started') {
-            btn.innerText = '🎯 Smart Container Scan';
-            btn.disabled = false;
+        // Try to identify the field ID
+        if (visionBtn.closest('#item-container-selector-row')) fieldId = 'item-container-selector';
+        else if (visionBtn.closest('#next-button-selector')?.parentElement || document.getElementById('next-button-selector') && visionBtn.parentElement.contains(document.getElementById('next-button-selector'))) fieldId = 'next-button-selector';
+        else if (visionBtn.closest('#scroll-container-selector')?.parentElement || document.getElementById('scroll-container-selector') && visionBtn.parentElement.contains(document.getElementById('scroll-container-selector'))) fieldId = 'scroll-container-selector';
+        else {
+            const row = visionBtn.closest('.field-row');
+            if (row) fieldId = row.id;
         }
-    });
+
+        if (!fieldId) {
+             // Fallback for next-button and scroll-container if parent structure is loose
+             if (visionBtn.nextElementSibling?.id === 'inspect-next-btn') fieldId = 'next-button-selector';
+             else if (visionBtn.nextElementSibling?.id === 'inspect-scroll-container-btn') fieldId = 'scroll-container-selector';
+             else return;
+        }
+
+        visionBtn.innerText = '⏳';
+        visionBtn.disabled = true;
+        visionBtn.dataset.fieldId = fieldId; // Mark for the result handler
+
+        const [tab] = await chrome.tabs.query({active: true, currentWindow: true});
+        await chrome.scripting.executeScript({
+            target: { tabId: tab.id },
+            files: ['turndown.js', 'js/content/inspector.js', 'js/content/live-ai-inspector.js', 'js/content/macros.js', 'js/content/extractor.js', 'js/content/main.js']
+        }).catch(err => console.error(err));
+
+        chrome.tabs.sendMessage(tab.id, { action: 'START_LIVE_AI_MODE', fieldId: fieldId }, (response) => {
+            if (chrome.runtime.lastError) {
+                visionBtn.innerText = '👁️';
+                visionBtn.disabled = false;
+                return;
+            }
+            if (!response || response.status !== 'started') {
+                visionBtn.innerText = '👁️';
+                visionBtn.disabled = false;
+            }
+        });
+    }
 });
 
 // Live AI Vision Logic
@@ -347,7 +279,7 @@ document.getElementById('btn-live-vision').addEventListener('click', async () =>
     const [tab] = await chrome.tabs.query({active: true, currentWindow: true});
     await chrome.scripting.executeScript({
         target: { tabId: tab.id },
-        files: ['turndown.js', 'js/content/inspector.js', 'js/content/live-ai-inspector.js', 'js/content/macros.js', 'js/content/auto-detect.js', 'js/content/extractor.js', 'js/content/main.js']
+        files: ['turndown.js', 'js/content/inspector.js', 'js/content/live-ai-inspector.js', 'js/content/macros.js', 'js/content/extractor.js', 'js/content/main.js']
     }).catch(err => console.error(err));
 
     chrome.tabs.sendMessage(tab.id, { action: 'START_LIVE_AI_MODE' }, (response) => {
@@ -375,7 +307,7 @@ document.getElementById('btn-record-macro').addEventListener('click', async () =
     const [tab] = await chrome.tabs.query({active: true, currentWindow: true});
     await chrome.scripting.executeScript({
         target: { tabId: tab.id },
-        files: ['turndown.js', 'js/content/inspector.js', 'js/content/live-ai-inspector.js', 'js/content/macros.js', 'js/content/auto-detect.js', 'js/content/extractor.js', 'js/content/main.js']
+        files: ['turndown.js', 'js/content/inspector.js', 'js/content/live-ai-inspector.js', 'js/content/macros.js', 'js/content/extractor.js', 'js/content/main.js']
     }).catch(err => console.error(err));
 
     chrome.tabs.sendMessage(tab.id, { action: 'TOGGLE_MACRO_RECORDING', isRecording: isRecordingMacro });
@@ -414,7 +346,7 @@ document.getElementById('btn-generate-blueprint').addEventListener('click', asyn
     const [tab] = await chrome.tabs.query({active: true, currentWindow: true});
     await chrome.scripting.executeScript({
         target: { tabId: tab.id },
-        files: ['turndown.js', 'js/content/inspector.js', 'js/content/live-ai-inspector.js', 'js/content/macros.js', 'js/content/auto-detect.js', 'js/content/extractor.js', 'js/content/main.js']
+        files: ['turndown.js', 'js/content/inspector.js', 'js/content/live-ai-inspector.js', 'js/content/macros.js', 'js/content/extractor.js', 'js/content/main.js']
     }).catch(err => console.error(err));
 
     chrome.tabs.sendMessage(tab.id, { action: 'GET_PAGE_TEXT' }, (response) => {

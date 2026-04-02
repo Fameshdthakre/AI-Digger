@@ -246,7 +246,7 @@ document.getElementById('test-container-btn').addEventListener('click', async ()
     const [tab] = await chrome.tabs.query({active: true, currentWindow: true});
     await chrome.scripting.executeScript({
         target: { tabId: tab.id },
-        files: ['turndown.js', 'js/content/inspector.js', 'js/content/live-ai-inspector.js', 'js/content/macros.js', 'js/content/auto-detect.js', 'js/content/extractor.js', 'js/content/main.js']
+        files: ['turndown.js', 'js/content/inspector.js', 'js/content/live-ai-inspector.js', 'js/content/macros.js', 'js/content/extractor.js', 'js/content/main.js']
     }).catch(err => console.error("Failed to inject content scripts:", err));
 
     chrome.tabs.sendMessage(tab.id, { action: 'TEST_SELECTOR', field: fieldData }, (response) => {
@@ -282,7 +282,7 @@ document.getElementById('test-scroll-container-btn').addEventListener('click', a
     const [tab] = await chrome.tabs.query({active: true, currentWindow: true});
     await chrome.scripting.executeScript({
         target: { tabId: tab.id },
-        files: ['turndown.js', 'js/content/inspector.js', 'js/content/live-ai-inspector.js', 'js/content/macros.js', 'js/content/auto-detect.js', 'js/content/extractor.js', 'js/content/main.js']
+        files: ['turndown.js', 'js/content/inspector.js', 'js/content/live-ai-inspector.js', 'js/content/macros.js', 'js/content/extractor.js', 'js/content/main.js']
     }).catch(err => console.error("Failed to inject content scripts:", err));
 
     chrome.tabs.sendMessage(tab.id, { action: 'TEST_SELECTOR', field: fieldData }, (response) => {
@@ -301,7 +301,7 @@ document.getElementById('test-scroll-container-btn').addEventListener('click', a
 
 document.getElementById('inspect-scroll-container-btn').addEventListener('click', async () => {
     const [tab] = await chrome.tabs.query({active: true, currentWindow: true});
-    await chrome.scripting.executeScript({ target: { tabId: tab.id }, files: ['turndown.js', 'js/content/inspector.js', 'js/content/live-ai-inspector.js', 'js/content/macros.js', 'js/content/auto-detect.js', 'js/content/extractor.js', 'js/content/main.js'] }).catch(console.error);
+    await chrome.scripting.executeScript({ target: { tabId: tab.id }, files: ['turndown.js', 'js/content/inspector.js', 'js/content/live-ai-inspector.js', 'js/content/macros.js', 'js/content/extractor.js', 'js/content/main.js'] }).catch(console.error);
 
     chrome.tabs.sendMessage(tab.id, { action: 'START_INSPECTOR_FOR_FIELD', fieldId: 'scroll-container-selector', mode: 'css' }, (response) => {
         if (chrome.runtime.lastError) return;
@@ -319,7 +319,7 @@ document.getElementById('inspect-container-btn').addEventListener('click', async
     const [tab] = await chrome.tabs.query({active: true, currentWindow: true});
     await chrome.scripting.executeScript({
         target: { tabId: tab.id },
-        files: ['turndown.js', 'js/content/inspector.js', 'js/content/live-ai-inspector.js', 'js/content/macros.js', 'js/content/auto-detect.js', 'js/content/extractor.js', 'js/content/main.js']
+        files: ['turndown.js', 'js/content/inspector.js', 'js/content/live-ai-inspector.js', 'js/content/macros.js', 'js/content/extractor.js', 'js/content/main.js']
     }).catch(err => console.error("Failed to inject content scripts:", err));
 
     chrome.tabs.sendMessage(tab.id, { action: 'START_INSPECTOR_FOR_FIELD', fieldId: 'item-container-selector', mode: 'css' }, (response) => {
@@ -352,7 +352,7 @@ document.getElementById('test-next-btn').addEventListener('click', async () => {
     const [tab] = await chrome.tabs.query({active: true, currentWindow: true});
     await chrome.scripting.executeScript({
         target: { tabId: tab.id },
-        files: ['turndown.js', 'js/content/inspector.js', 'js/content/live-ai-inspector.js', 'js/content/macros.js', 'js/content/auto-detect.js', 'js/content/extractor.js', 'js/content/main.js']
+        files: ['turndown.js', 'js/content/inspector.js', 'js/content/live-ai-inspector.js', 'js/content/macros.js', 'js/content/extractor.js', 'js/content/main.js']
     }).catch(err => console.error("Failed to inject content scripts:", err));
 
     chrome.tabs.sendMessage(tab.id, { action: 'TEST_SELECTOR', field: fieldData }, (response) => {
@@ -376,7 +376,7 @@ document.getElementById('inspect-next-btn').addEventListener('click', async () =
     // Inject script programmatically if it's not already there
     await chrome.scripting.executeScript({
         target: { tabId: tab.id },
-        files: ['turndown.js', 'js/content/inspector.js', 'js/content/live-ai-inspector.js', 'js/content/macros.js', 'js/content/auto-detect.js', 'js/content/extractor.js', 'js/content/main.js']
+        files: ['turndown.js', 'js/content/inspector.js', 'js/content/live-ai-inspector.js', 'js/content/macros.js', 'js/content/extractor.js', 'js/content/main.js']
     }).catch(err => console.error("Failed to inject content scripts:", err));
 
     chrome.tabs.sendMessage(tab.id, { action: 'START_INSPECTOR_FOR_FIELD', fieldId: 'next-button-selector', mode: 'css' }, (response) => {
@@ -429,8 +429,7 @@ function addFieldRow(name = '', selector = '', type = 'css', extractType = 'text
             <button class="remove-field" title="Remove Field">🗑️</button>
         </div>
         <div class="field-row-bottom">
-            <button class="btn-wand" title="Describe to AI" style="flex-shrink: 0; padding: 4px 8px; font-size: 14px; background: transparent; border: 1px solid var(--border); border-radius: 4px; border-top-right-radius: 0; border-bottom-right-radius: 0; cursor: pointer; border-right: none; ${type === 'ai' ? 'display: none;' : ''}">🪄</button>
-            <button class="btn-parent-wand" title="Find Parent Container with AI" style="flex-shrink: 0; padding: 4px 8px; font-size: 14px; background: transparent; border: 1px solid var(--border); border-radius: 4px; border-top-left-radius: 0; border-bottom-left-radius: 0; cursor: pointer; ${type === 'ai' ? 'display: none;' : ''}">📦</button>
+            <button class="btn-vision" title="Live AI Vision" style="padding: 0 8px; border-radius: 4px; font-size: 14px; background: transparent; border: 1px solid var(--border); cursor: pointer; flex-shrink: 0; ${type === 'ai' ? 'display: none;' : ''}">👁️</button>
             <button class="inspect-btn" title="Inspect Selector" style="${type === 'ai' ? 'display: none;' : ''}">🔍</button>
             <button class="test-btn" title="Test Selector" style="${type === 'ai' ? 'display: none;' : ''}">🧪</button>
             <input type="text" placeholder="CSS Selector, XPath, or AI Prompt" class="f-selector" value="${selector}" style="flex: 1;" />
@@ -495,7 +494,7 @@ function addFieldRow(name = '', selector = '', type = 'css', extractType = 'text
         // Inject script programmatically if it's not already there
         await chrome.scripting.executeScript({
             target: { tabId: tab.id },
-            files: ['turndown.js', 'js/content/inspector.js', 'js/content/live-ai-inspector.js', 'js/content/macros.js', 'js/content/auto-detect.js', 'js/content/extractor.js', 'js/content/main.js']
+            files: ['turndown.js', 'js/content/inspector.js', 'js/content/live-ai-inspector.js', 'js/content/macros.js', 'js/content/extractor.js', 'js/content/main.js']
         }).catch(err => console.error("Failed to inject content scripts:", err));
 
         const mode = typeSelect.value; // css or xpath
@@ -530,7 +529,7 @@ function addFieldRow(name = '', selector = '', type = 'css', extractType = 'text
 
         await chrome.scripting.executeScript({
             target: { tabId: tab.id },
-            files: ['turndown.js', 'js/content/inspector.js', 'js/content/live-ai-inspector.js', 'js/content/macros.js', 'js/content/auto-detect.js', 'js/content/extractor.js', 'js/content/main.js']
+            files: ['turndown.js', 'js/content/inspector.js', 'js/content/live-ai-inspector.js', 'js/content/macros.js', 'js/content/extractor.js', 'js/content/main.js']
         }).catch(err => console.error("Failed to inject content scripts:", err));
 
         chrome.tabs.sendMessage(tab.id, { action: 'TEST_SELECTOR', field: fieldData }, (response) => {
@@ -566,8 +565,7 @@ function addActionRow(type = 'click', selector = '', text = '') {
                 <option value="type" ${type === 'type' ? 'selected' : ''}>Type Text</option>
                 <option value="wait" ${type === 'wait' ? 'selected' : ''}>Wait For</option>
             </select>
-            <button class="btn-wand" title="Describe to AI" style="flex-shrink: 0; padding: 4px 8px; font-size: 14px; background: transparent; border: 1px solid var(--border); border-radius: 4px; border-top-right-radius: 0; border-bottom-right-radius: 0; cursor: pointer; border-right: none;">🪄</button>
-            <button class="btn-parent-wand" title="Find Parent Container with AI" style="flex-shrink: 0; padding: 4px 8px; font-size: 14px; background: transparent; border: 1px solid var(--border); border-radius: 4px; border-top-left-radius: 0; border-bottom-left-radius: 0; cursor: pointer;">📦</button>
+            <button class="btn-vision" title="Live AI Vision" style="padding: 0 8px; border-radius: 4px; font-size: 14px; background: transparent; border: 1px solid var(--border); cursor: pointer; flex-shrink: 0;">👁️</button>
             <button class="inspect-btn a-inspect" title="Inspect Selector" style="flex-shrink: 0;">🔍</button>
             <button class="test-btn a-test" title="Test Action" style="flex-shrink: 0;">🧪</button>
             <input type="text" placeholder="CSS or XPath Selector" class="a-selector" value="${selector}" style="flex: 1;" />
@@ -605,7 +603,7 @@ function addActionRow(type = 'click', selector = '', text = '') {
 
         await chrome.scripting.executeScript({
             target: { tabId: tab.id },
-            files: ['turndown.js', 'js/content/inspector.js', 'js/content/live-ai-inspector.js', 'js/content/macros.js', 'js/content/auto-detect.js', 'js/content/extractor.js', 'js/content/main.js']
+            files: ['turndown.js', 'js/content/inspector.js', 'js/content/live-ai-inspector.js', 'js/content/macros.js', 'js/content/extractor.js', 'js/content/main.js']
         }).catch(err => console.error("Failed to inject content scripts:", err));
 
         chrome.tabs.sendMessage(tab.id, { action: 'TEST_SELECTOR', field: fieldData }, (response) => {
@@ -626,7 +624,7 @@ function addActionRow(type = 'click', selector = '', text = '') {
         const [tab] = await chrome.tabs.query({active: true, currentWindow: true});
         await chrome.scripting.executeScript({
             target: { tabId: tab.id },
-            files: ['turndown.js', 'js/content/inspector.js', 'js/content/live-ai-inspector.js', 'js/content/macros.js', 'js/content/auto-detect.js', 'js/content/extractor.js', 'js/content/main.js']
+            files: ['turndown.js', 'js/content/inspector.js', 'js/content/live-ai-inspector.js', 'js/content/macros.js', 'js/content/extractor.js', 'js/content/main.js']
         }).catch(err => console.error(err));
 
         chrome.tabs.sendMessage(tab.id, { action: 'START_INSPECTOR_FOR_FIELD', fieldId: actionId, mode: 'css' }, (response) => {
