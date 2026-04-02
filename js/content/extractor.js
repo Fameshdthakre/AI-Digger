@@ -107,7 +107,15 @@ function extractFieldData(field, contextNode = document) {
         }
 
         if (elements.length === 0) {
-            return field.multiple ? [] : null;
+            // Apply Missing Node Problem logic
+            const aiHeal = field.aiHeal !== false; // Default to true
+            if (aiHeal) {
+                return field.multiple ? [] : null; // Will trigger failure array logic below
+            } else {
+                // If aiHeal is false, we gracefully soft-fail by returning an empty string/array,
+                // which will NOT trigger the failure loop because we use a special "__USER_SKIPPED__" marker internally
+                return field.multiple ? ["__USER_SKIPPED__"] : "__USER_SKIPPED__";
+            }
         }
 
         // Define extraction helper function
@@ -152,14 +160,23 @@ function executeExtraction(blueprint) {
                 needsAi = true;
                 return;
             }
-            row[field.name] = extractFieldData(field, contextNode);
+            let extractedValue = extractFieldData(field, contextNode);
 
-            // Capture failures for potential self-healing
-            if (!row[field.name] || (Array.isArray(row[field.name]) && row[field.name].length === 0)) {
-                // Ensure we only track unique failed fields
-                if (!failedFieldsGlobal.some(f => f.name === field.name)) {
-                    failedFieldsGlobal.push(field);
-                    needsAi = true;
+            // Handle Missing Node Problem logic (Accept None vs AI Fallback)
+            if (extractedValue === "__USER_SKIPPED__") {
+                row[field.name] = ""; // Gracefully soft-fail, skip self-healing
+            } else if (Array.isArray(extractedValue) && extractedValue.length > 0 && extractedValue[0] === "__USER_SKIPPED__") {
+                row[field.name] = []; // Gracefully soft-fail array
+            } else {
+                row[field.name] = extractedValue;
+
+                // Capture actual failures for potential self-healing (where aiHeal is true)
+                if (!row[field.name] || (Array.isArray(row[field.name]) && row[field.name].length === 0) || row[field.name] === "ERROR") {
+                    // Ensure we only track unique failed fields
+                    if (!failedFieldsGlobal.some(f => f.name === field.name)) {
+                        failedFieldsGlobal.push(field);
+                        needsAi = true;
+                    }
                 }
             }
         });
