@@ -11,10 +11,10 @@
   "permissions": [
     "scripting",
     "storage",
+    "unlimitedStorage",
     "sidePanel",
     "alarms",
-    "identity",
-    "identity.email"
+    "identity"
   ],
   "host_permissions": [
     "<all_urls>",
@@ -23,7 +23,8 @@
     "https://api.anthropic.com/*"
   ],
   "background": {
-    "service_worker": "background.js"
+    "service_worker": "background.js",
+    "type": "module"
   },
   "side_panel": {
     "default_path": "sidepanel.html"
@@ -35,5 +36,18 @@
       "48": "icons/icon48.png",
       "128": "icons/icon128.png"
     }
-  }
+  },
+  "web_accessible_resources": [
+    {
+      "resources": [
+        "dashboard.html",
+        "css/sidepanel.css",
+        "ui/dashboard-page.js",
+        "modules/data-store.js"
+      ],
+      "matches": [
+        "<all_urls>"
+      ]
+    }
+  ]
 }

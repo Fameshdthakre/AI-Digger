@@ -14,7 +14,7 @@
             <div class="header-title-row">
                 <img src="icons/icon16.png" alt="Logo" style="margin-right: 8px; width: 16px; height: 16px;" />
                 <h1>AI Digger</h1>
-                <span class="badge" id="app-version-badge">v1.0.1</span>
+                <span class="badge" id="app-version-badge">v1.0.0</span>
             </div>
             <span style="font-size: 12px; color: var(--text-muted); font-weight: 500;">Smart Web Scraper</span>
         </div>
@@ -27,6 +27,7 @@
         <div class="tab active" data-target="view-build">Build Blueprint</div>
         <div class="tab" data-target="view-run">Run & Export</div>
         <div class="tab" data-target="view-settings">⚙️ Settings</div>
+        <div class="tab" id="tab-dashboard" style="color: var(--magic-bg); font-weight: 700;">📊 Dashboard</div>
     </div>
 
     <div class="container">
@@ -34,10 +35,7 @@
         <!-- BUILD VIEW -->
         <div id="view-build" class="view active">
             <div class="card" style="background: var(--magic-bg); border-color: var(--magic-border);">
-                <div style="display: flex; justify-content: space-between; align-items: center;">
-                    <label style="color: var(--magic-text); margin:0;">✨ Magic Build (Chat-to-Scrape)</label>
-                    <button id="btn-enhance-prompt" class="btn" style="background: transparent; border: 1px solid var(--magic-border); color: var(--magic-text); font-size: 10px; padding: 2px 6px; border-radius: 4px;">🪄 Enhance Prompt</button>
-                </div>
+                <label style="color: var(--magic-text);">✨ Magic Build (Chat-to-Scrape)</label>
                 <div style="font-size: 11px; color: var(--text-muted); margin-bottom: 8px;">Describe what you want to extract and let AI build the entire scraper.</div>
                 <textarea id="nl-prompt" placeholder="e.g., Extract all product titles and prices, then click the next page button."></textarea>
                 <button id="btn-generate-blueprint" class="btn btn-primary" style="background-color: var(--magic-text); border-color: var(--magic-text); margin-top: 8px;">Generate Blueprint</button>
@@ -101,6 +99,24 @@
                 </div>
             </div>
 
+            <details class="card" id="wait-settings">
+                <summary>
+                    <span class="summary-title">⏱️ Dynamic Wait Conditions (Optional)</span>
+                    <span class="summary-subtitle" id="subtitle-wait">None</span>
+                </summary>
+                <div style="font-size: 11px; color: var(--text-muted); margin-bottom: 8px;">Wait for specific elements to appear before extracting data.</div>
+                <div class="flex" style="gap: 8px;">
+                    <div style="flex: 2;">
+                        <label style="font-size: 10px;">Wait for Selector</label>
+                        <input type="text" id="wait-for-selector" placeholder=".dynamic-content" style="font-size: 11px;" />
+                    </div>
+                    <div style="flex: 1;">
+                        <label style="font-size: 10px;">Max Wait (ms)</label>
+                        <input type="number" id="max-wait-ms" value="15000" step="1000" style="font-size: 11px;" />
+                    </div>
+                </div>
+            </details>
+
             <details class="card">
                 <summary>
                     <span class="summary-title">Pre-Extraction Actions (Optional)</span>
@@ -121,7 +137,10 @@
                 </summary>
                 <div style="font-size: 11px; color: var(--text-muted); margin-bottom: 8px;">If scraping a list/grid, enter the selector for the repeating item card. The data fields below will be extracted relative to this container.</div>
                 <div style="display: flex; gap: 8px;" id="item-container-selector-row">
-                    <button class="btn-vision" title="Live AI Vision" style="padding: 0 8px; border-radius: 4px; font-size: 14px; background: transparent; border: 1px solid var(--border); cursor: pointer; flex-shrink: 0;">👁️</button>
+                    <div style="display: flex; flex-shrink: 0;">
+                        <button class="btn-wand inspect-btn" id="wand-item-container-btn" title="Describe to AI" style="flex-shrink: 0; padding: 4px 8px; font-size: 14px; background: transparent; border: 1px solid var(--border); border-radius: 4px; border-top-right-radius: 0; border-bottom-right-radius: 0; cursor: pointer; border-right: none;">🪄</button>
+                        <button class="btn-parent-wand" title="Find Parent Container with AI" style="flex-shrink: 0; padding: 4px 8px; font-size: 14px; background: transparent; border: 1px solid var(--border); border-radius: 4px; border-top-left-radius: 0; border-bottom-left-radius: 0; cursor: pointer; margin-right: 8px;">📦</button>
+                    </div>
                     <button class="inspect-btn" id="inspect-container-btn" title="Inspect Container" style="flex-shrink: 0;">🔍</button>
                     <button class="test-btn" id="test-container-btn" title="Test Container" style="flex-shrink: 0;">🧪</button>
                     <input type="text" id="item-container-selector" placeholder="CSS or XPath for repeating Item Container (e.g. .product-card)" style="margin-bottom: 0; flex: 1;" />
@@ -138,7 +157,7 @@
                 <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
                     <label style="margin: 0;">Data Fields to Extract</label>
                     <div style="display: flex; gap: 8px;">
-                        <button id="btn-live-vision" class="btn btn-primary" style="width: auto; padding: 6px 12px; font-size: 11px; background-color: #ec4899; border-color: #ec4899;">👁️ Live AI Vision</button>
+                        <button id="btn-auto-detect" class="btn btn-primary" style="width: auto; padding: 6px 12px; font-size: 11px; background-color: #8b5cf6; border-color: #8b5cf6;" title="Click a repeating container to extract fields locally without AI">🎯 Smart Container Scan</button>
                     </div>
                 </div>
                 <div id="fields-container">
@@ -157,7 +176,7 @@
                     <div style="flex: 2;">
                         <label>Pagination 'Next' Button</label>
                         <div style="display: flex; gap: 8px;">
-                            <button class="btn-vision" title="Live AI Vision" style="padding: 0 8px; border-radius: 4px; font-size: 14px; background: transparent; border: 1px solid var(--border); cursor: pointer; flex-shrink: 0;">👁️</button>
+                            <button class="btn-wand inspect-btn" id="wand-next-button-btn" title="Describe to AI" style="padding: 0 8px; border-radius: 4px; font-size: 14px; background: transparent; border: 1px solid var(--border); cursor: pointer;">🪄</button>
                             <button class="inspect-btn" id="inspect-next-btn" title="Inspect Next Button" style="flex-shrink: 0;">🔍</button>
                             <button class="test-btn" id="test-next-btn" title="Test Next Button" style="flex-shrink: 0;">🧪</button>
                             <input type="text" id="next-button-selector" placeholder="CSS or XPath for Next button" style="flex: 1;" />
@@ -167,6 +186,10 @@
                     <div style="flex: 1;">
                         <label>Max Pages</label>
                         <input type="number" id="max-pages" value="1" min="1" />
+                    </div>
+                    <div style="flex: 1;">
+                        <label title="Additional delay after clicking next button to wait for content to load">Wait after click (ms)</label>
+                        <input type="number" id="pagination-wait-ms" value="2000" min="0" step="500" />
                     </div>
                 </div>
 
@@ -182,7 +205,7 @@
                         <input type="number" id="max-scrolls" value="5" min="1" style="width: 60px;" />
                     </div>
                     <div style="display: flex; gap: 8px; align-items: center;">
-                        <button class="btn-vision" title="Live AI Vision" style="padding: 0 8px; border-radius: 4px; font-size: 14px; background: transparent; border: 1px solid var(--border); cursor: pointer; flex-shrink: 0;">👁️</button>
+                        <button class="btn-wand inspect-btn" id="wand-scroll-container-btn" title="Describe to AI" style="padding: 0 8px; border-radius: 4px; font-size: 14px; background: transparent; border: 1px solid var(--border); cursor: pointer;">🪄</button>
                         <button class="inspect-btn" id="inspect-scroll-container-btn" title="Inspect Scroll Container" style="flex-shrink: 0;">🔍</button>
                         <button class="test-btn" id="test-scroll-container-btn" title="Test Scroll Container" style="flex-shrink: 0;">🧪</button>
                         <input type="text" id="scroll-container-selector" placeholder="Target Scroll Box (Optional)" title="If the page has a specific scrolling box, enter its CSS selector here. Leave blank for whole page." style="flex: 1; margin-bottom: 0;" />
@@ -238,8 +261,15 @@
                     <span class="summary-subtitle" id="subtitle-antibot">Stealth Off, 2-5s</span>
                 </summary>
                 <label class="checkbox-label" style="font-size: 12px; font-weight: 600; color: var(--text-main); margin-top: 8px;">
-                    <input type="checkbox" id="enable-stealth-mode" /> Enable Human Stealth Emulation (Mouse/Scroll Jitters)
+                    <input type="checkbox" id="enable-stealth-mode" /> Enable Human Stealth Emulation
                 </label>
+                <div id="stealth-options" style="display: none; margin-top: 8px; padding-left: 20px;">
+                    <label style="font-size: 11px;">Stealth Level</label>
+                    <select id="stealth-level" style="font-size: 11px; padding: 4px;">
+                        <option value="basic">Basic (Randomized Scrolls)</option>
+                        <option value="advanced" selected>Advanced (Mouse Jitter + Scrolls)</option>
+                    </select>
+                </div>
                 <div class="flex mt-2">
                     <div class="flex-1">
                         <label>Min Delay (sec)</label>
@@ -260,6 +290,13 @@
                         <input type="number" id="batch-pause" value="10" min="1" style="width: 70px;" /> <span style="font-size: 11px;">sec</span>
                     </div>
                 </div>
+            <details class="card">
+                <summary>
+                    <span class="summary-title">🛡️ Data Validation (Schema)</span>
+                    <span class="summary-subtitle">Optional</span>
+                </summary>
+                <div style="font-size: 11px; color: var(--text-muted); margin-bottom: 8px;">Ensure extracted data meets specific criteria.</div>
+                <textarea id="data-schema" placeholder='{ "Price": { "required": true, "type": "number" } }' style="font-size: 11px; height: 80px; font-family: monospace;"></textarea>
             </details>
         </div>
 
@@ -424,9 +461,6 @@
     <div id="toast-container"></div>
 
     <script src="xlsx.full.min.js"></script>
-    <script src="js/ui-core.js"></script>
-    <script src="js/jobs.js"></script>
-    <script src="js/export.js"></script>
-    <script src="js/main.js"></script>
+    <script type="module" src="ui/main-ui.js"></script>
 </body>
 </html>
