@@ -9,12 +9,21 @@ var currentInspectMode = 'css';
 function handleInspectorKeyDown(e) {
     if (e.key === 'Escape' && inspectorActive) {
         e.preventDefault();
+        e.stopPropagation();
+        // Capture fieldId BEFORE stopInspector() nullifies it
+        var fieldId = currentInspectFieldId;
         stopInspector();
-        chrome.runtime.sendMessage({ action: 'INSPECTOR_CANCELLED', fieldId: currentInspectFieldId });
+        chrome.runtime.sendMessage({ action: 'INSPECTOR_CANCELLED', fieldId: fieldId });
     }
 }
 
 function startInspector(fieldId, mode) {
+    // If another mode is active (e.g. auto-detect), shut it down first
+    if (typeof stopAutoDetect === 'function' && autoDetectActive) {
+        stopAutoDetect();
+        chrome.runtime.sendMessage({ action: 'AUTO_DETECT_RESULT', status: 'stopped' });
+    }
+
     currentInspectFieldId = fieldId;
     currentInspectMode = mode || 'css';
 
@@ -44,7 +53,10 @@ function startInspector(fieldId, mode) {
 function stopInspector() {
     inspectorActive = false;
     document.body.style.cursor = 'default';
-    if (overlayBox) overlayBox.remove();
+    if (overlayBox) {
+        overlayBox.remove();
+        overlayBox = null;
+    }
     var ui = document.getElementById('ai-digger-inspector-ui');
     if (ui) ui.remove();
     document.removeEventListener('mouseover', handleMouseOver, true);
@@ -54,6 +66,10 @@ function stopInspector() {
 }
 
 function createInspectorUIPanel() {
+    // Remove any existing panel first
+    var existing = document.getElementById('ai-digger-inspector-ui');
+    if (existing) existing.remove();
+
     var ui = document.createElement('div');
     ui.id = 'ai-digger-inspector-ui';
     ui.style.position = 'fixed';
@@ -75,9 +91,11 @@ function createInspectorUIPanel() {
         <button id="ai-digger-cancel-inspector" style="background: white; color: #3b82f6; border: none; padding: 6px 12px; border-radius: 4px; cursor: pointer; font-weight: bold; font-size: 12px;">Cancel</button>
     `;
     document.body.appendChild(ui);
-    document.getElementById('ai-digger-cancel-inspector').addEventListener('click', function() {
+    document.getElementById('ai-digger-cancel-inspector').addEventListener('click', function () {
+        // Capture fieldId BEFORE stopInspector() nullifies it
+        var fieldId = currentInspectFieldId;
         stopInspector();
-        chrome.runtime.sendMessage({ action: 'INSPECTOR_CANCELLED', fieldId: currentInspectFieldId });
+        chrome.runtime.sendMessage({ action: 'INSPECTOR_CANCELLED', fieldId: fieldId });
     });
 }
 
@@ -165,7 +183,7 @@ function handleClick(e) {
 
 function generateResilientSelectors(el) {
     const selectors = [];
-    if (!el || el.tagName.toLowerCase() === 'html') return [{type: 'css', val: 'html'}];
+    if (!el || el.tagName.toLowerCase() === 'html') return [{ type: 'css', val: 'html' }];
 
     const tagName = el.tagName.toLowerCase();
 

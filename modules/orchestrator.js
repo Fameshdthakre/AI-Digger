@@ -17,6 +17,16 @@ export const Orchestrator = {
         jobProgress: { current: 0, total: 0 }
     },
 
+    isValidUrl(url) {
+        if (!url || typeof url !== 'string') return false;
+        try {
+            const parsed = new URL(url);
+            return parsed.protocol === 'http:' || parsed.protocol === 'https:';
+        } catch {
+            return false;
+        }
+    },
+
     async init() {
         const res = await DataStore.get(['jobState', 'jobLogs', 'jobProgress', 'scrapedData']);
         if (res.jobState && res.jobState.isRunning) {
@@ -52,7 +62,7 @@ export const Orchestrator = {
         };
 
         if (blueprint.scrapingType === 'multi-url') {
-            jobState.urlsToScrape = blueprint.urls ? blueprint.urls.split('\n').map(u => u.trim()).filter(u => u) : [];
+            jobState.urlsToScrape = blueprint.urls ? blueprint.urls.split('\n').map(u => u.trim()).filter(u => this.isValidUrl(u)) : [];
             jobState.currentIndex = 0;
             this.state.jobProgress.total = jobState.urlsToScrape.length;
         } else if (blueprint.scrapingType === 'single-page') {
@@ -84,6 +94,10 @@ export const Orchestrator = {
     },
 
     async stopJob() {
+        if (this.state.unsavedRowsCount > 0) {
+            await DataStore.set({ scrapedData: this.state.scrapedData });
+            this.state.unsavedRowsCount = 0;
+        }
         await DataStore.archiveRun(this.state.currentJob?.jobName, this.state.scrapedData);
         this.state.isRunning = false;
         this.state.currentJob = null;
@@ -144,7 +158,7 @@ export const Orchestrator = {
             let tab = await this.createOrUpdateTab(item.detailUrl);
             await this.sleep(2000);
             await this.ensureScriptInjected(tab.id);
-            
+
             // Execute Actions
             if (blueprint.actions?.length > 0) {
                 await this.addLog(`Executing ${blueprint.actions.length} actions...`);
@@ -154,11 +168,11 @@ export const Orchestrator = {
             // Wait logic
             if (blueprint.waitOptions?.waitForSelector) {
                 await this.addLog(`Waiting for selector: ${blueprint.waitOptions.waitForSelector}...`);
-                await chrome.tabs.sendMessage(tab.id, { 
-                    action: 'WAIT_FOR_ELEMENT', 
+                await chrome.tabs.sendMessage(tab.id, {
+                    action: 'WAIT_FOR_ELEMENT',
                     selector: blueprint.waitOptions.waitForSelector,
-                    timeout: blueprint.waitOptions.maxWaitMs 
-                }).catch(()=>null);
+                    timeout: blueprint.waitOptions.maxWaitMs
+                }).catch(() => null);
             }
 
             let detailData = await this.scrapeTab(tab.id, blueprint, item.detailUrl);
@@ -178,7 +192,8 @@ export const Orchestrator = {
             chrome.alarms.create("nextJobStep", { when: Date.now() + delay });
 
         } catch (error) {
-            await this.addLog(`ERROR: Detail scrape failed ${item.detailUrl}: ${error.message}`);
+            console.error(`Detail scrape failed ${item.detailUrl}:`, error);
+            await this.addLog(`ERROR: Detail scrape failed for ${item.detailUrl}. Check console for details.`);
             this.state.scrapedData.push(item.parentRow);
             await DataStore.set({ scrapedData: this.state.scrapedData });
             jobState.deepCrawlIndex++;
@@ -217,17 +232,17 @@ export const Orchestrator = {
             // Wait logic
             if (jobState.blueprint.waitOptions?.waitForSelector) {
                 await this.addLog(`Waiting for: ${jobState.blueprint.waitOptions.waitForSelector}`);
-                await chrome.tabs.sendMessage(tab.id, { 
-                    action: 'WAIT_FOR_ELEMENT', 
+                await chrome.tabs.sendMessage(tab.id, {
+                    action: 'WAIT_FOR_ELEMENT',
                     selector: jobState.blueprint.waitOptions.waitForSelector,
-                    timeout: jobState.blueprint.waitOptions.maxWaitMs 
-                }).catch(()=>null);
+                    timeout: jobState.blueprint.waitOptions.maxWaitMs
+                }).catch(() => null);
             }
 
             if (jobState.blueprint.antiBot?.stealthMode) {
-                await chrome.tabs.sendMessage(tab.id, { 
-                    action: 'SIMULATE_STEALTH', 
-                    level: jobState.blueprint.antiBot.stealthLevel 
+                await chrome.tabs.sendMessage(tab.id, {
+                    action: 'SIMULATE_STEALTH',
+                    level: jobState.blueprint.antiBot.stealthLevel
                 }).catch(() => null);
             }
 
@@ -255,7 +270,8 @@ export const Orchestrator = {
             chrome.alarms.create("nextJobStep", { when: Date.now() + delay });
 
         } catch (error) {
-            await this.addLog(`ERROR: Failed to load or scrape ${url}: ${error.message}`);
+            console.error(`Failed to load or scrape ${url}:`, error);
+            await this.addLog(`ERROR: Failed to load or scrape URL ${url}. Check console for details.`);
             jobState.currentIndex++;
             await DataStore.set({ jobState });
             chrome.alarms.create("nextJobStep", { when: Date.now() + 1000 });
@@ -283,15 +299,15 @@ export const Orchestrator = {
 
             if (jobState.blueprint.waitOptions?.waitForSelector) {
                 await this.addLog(`Waiting for selector: ${jobState.blueprint.waitOptions.waitForSelector}`);
-                await chrome.tabs.sendMessage(jobState.tabId, { 
-                    action: 'WAIT_FOR_ELEMENT', 
+                await chrome.tabs.sendMessage(jobState.tabId, {
+                    action: 'WAIT_FOR_ELEMENT',
                     selector: jobState.blueprint.waitOptions.waitForSelector,
-                    timeout: jobState.blueprint.waitOptions.maxWaitMs 
-                }).catch(()=>null);
+                    timeout: jobState.blueprint.waitOptions.maxWaitMs
+                }).catch(() => null);
             } else {
                 const firstField = jobState.blueprint.fields.find(f => f.type !== 'ai');
                 if (firstField) {
-                    await chrome.tabs.sendMessage(jobState.tabId, { action: 'WAIT_FOR_ELEMENT', selector: firstField.selector }).catch(()=>null);
+                    await chrome.tabs.sendMessage(jobState.tabId, { action: 'WAIT_FOR_ELEMENT', selector: firstField.selector }).catch(() => null);
                 } else {
                     await this.sleep(2000);
                 }
@@ -301,7 +317,7 @@ export const Orchestrator = {
                 let maxScrolls = jobState.blueprint.singlePageOptions.maxScrolls || 5;
                 for (let s = 0; s < maxScrolls; s++) {
                     if (!this.state.isRunning) return;
-                    await chrome.tabs.sendMessage(jobState.tabId, { action: 'SCROLL_BOTTOM', blueprint: jobState.blueprint }).catch(()=>null);
+                    await chrome.tabs.sendMessage(jobState.tabId, { action: 'SCROLL_BOTTOM', blueprint: jobState.blueprint }).catch(() => null);
                     await this.sleep(2000);
                 }
             }
@@ -324,7 +340,7 @@ export const Orchestrator = {
             if (jobState.currentPage < jobState.maxPages) {
                 let nextSelector = jobState.blueprint.singlePageOptions?.nextButtonSelector;
                 if (nextSelector) {
-                    let clickRes = await chrome.tabs.sendMessage(jobState.tabId, { action: 'CLICK_NEXT', selector: nextSelector }).catch(()=>null);
+                    let clickRes = await chrome.tabs.sendMessage(jobState.tabId, { action: 'CLICK_NEXT', selector: nextSelector }).catch(() => null);
                     if (clickRes && clickRes.status !== 'not_found') {
                         hasNextPage = true;
                         const userDelay = jobState.blueprint.singlePageOptions?.paginationWaitMs || 0;
@@ -352,12 +368,17 @@ export const Orchestrator = {
             }
 
         } catch (err) {
-            await this.addLog(`ERROR: Single page scrape failed: ${err.message}`);
+            console.error(`Single page scrape failed:`, err);
+            await this.addLog(`ERROR: Single page scrape failed. Check console for details.`);
             await this.completeJob();
         }
     },
 
     async completeJob() {
+        if (this.state.unsavedRowsCount > 0) {
+            await DataStore.set({ scrapedData: this.state.scrapedData });
+            this.state.unsavedRowsCount = 0;
+        }
         await DataStore.archiveRun(this.state.currentJob?.jobName, this.state.scrapedData);
         this.state.isRunning = false;
         this.state.currentJob = null;
@@ -399,7 +420,7 @@ export const Orchestrator = {
                 target: { tabId },
                 files: ['turndown.js', 'js/content/stealth.js', 'js/content/inspector.js', 'js/content/macros.js', 'js/content/auto-detect.js', 'js/content/extractor.js', 'js/content/main.js']
             });
-        } catch (e) {}
+        } catch (e) { }
     },
 
     async executeActions(tabId, actions) {
@@ -454,7 +475,7 @@ export const Orchestrator = {
         if (visionFields.length > 0) {
             await this.addLog(`Using AI Vision for ${visionFields.length} fields...`);
             const screenshot = await this.captureTabScreenshot(tabId);
-            
+
             // For vision, we usually want to extract from the image directly.
             // We can reuse extractData but with image options.
             const visionData = await AIProvider.extractData({ fields: visionFields }, data._pageMarkdown, settings, { imageUrl: screenshot });
@@ -485,14 +506,14 @@ export const Orchestrator = {
     async saveExtractedData(data, url, pageIndex) {
         const blueprint = this.state.currentJob;
         const rows = this.flattenData(data, blueprint, url, pageIndex);
-        
+
         // Scenario 2 Handling: Deduplicate based on Primary Key
         const pkField = blueprint.fields.find(f => f.isPrimaryKey)?.name;
         let newUniqueRows = rows;
 
         if (pkField) {
             newUniqueRows = rows.filter(newRow => {
-                const isDuplicate = this.state.scrapedData.some(oldRow => 
+                const isDuplicate = this.state.scrapedData.some(oldRow =>
                     String(oldRow[pkField]).trim() === String(newRow[pkField]).trim()
                 );
                 return !isDuplicate;
@@ -502,7 +523,12 @@ export const Orchestrator = {
         }
 
         if (newUniqueRows.length > 0) {
-            this.state.scrapedData = await DataStore.saveScrapedData(newUniqueRows, this.state.scrapedData);
+            this.state.scrapedData = this.state.scrapedData.concat(newUniqueRows);
+            this.state.unsavedRowsCount = (this.state.unsavedRowsCount || 0) + newUniqueRows.length;
+            if (this.state.unsavedRowsCount >= 50) {
+                await DataStore.set({ scrapedData: this.state.scrapedData });
+                this.state.unsavedRowsCount = 0;
+            }
         } else if (rows.length > 0) {
             await this.addLog("All records on this page were already captured (duplicate scan).");
         }
@@ -545,8 +571,10 @@ export const Orchestrator = {
                 let detailUrl = row[jobState.blueprint.detailUrlField] || Object.values(row).find(v => typeof v === 'string' && (v.startsWith('http') || v.startsWith('/')));
                 if (detailUrl) {
                     if (detailUrl.startsWith('/')) detailUrl = new URL(detailUrl, url).href;
-                    jobState.deepCrawlQueue.push({ detailUrl, detailBlueprint: jobState.detailBlueprint, parentRow: row });
-                    detailAdded = true;
+                    if (this.isValidUrl(detailUrl)) {
+                        jobState.deepCrawlQueue.push({ detailUrl, detailBlueprint: jobState.detailBlueprint, parentRow: row });
+                        detailAdded = true;
+                    }
                 }
             }
 
@@ -556,21 +584,27 @@ export const Orchestrator = {
                     let targetUrl = row[field.name];
                     if (targetUrl && (typeof targetUrl === 'string') && (targetUrl.startsWith('http') || targetUrl.startsWith('/'))) {
                         if (targetUrl.startsWith('/')) targetUrl = new URL(targetUrl, url).href;
-                        jobState.deepCrawlQueue.push({ 
-                            detailUrl: targetUrl, 
-                            detailBlueprint: savedJobs[field.followJob], 
-                            parentRow: row 
-                        });
-                        detailAdded = true;
+                        if (this.isValidUrl(targetUrl)) {
+                            jobState.deepCrawlQueue.push({
+                                detailUrl: targetUrl,
+                                detailBlueprint: savedJobs[field.followJob],
+                                parentRow: row
+                            });
+                            detailAdded = true;
+                        }
                     }
                 }
             }
 
             if (!detailAdded) {
                 this.state.scrapedData.push(row);
+                this.state.unsavedRowsCount = (this.state.unsavedRowsCount || 0) + 1;
             }
         }
-        await DataStore.set({ scrapedData: this.state.scrapedData });
+        if (this.state.unsavedRowsCount >= 50) {
+            await DataStore.set({ scrapedData: this.state.scrapedData });
+            this.state.unsavedRowsCount = 0;
+        }
     },
 
     async processAndSaveDeepCrawlData(detailData, queueItem, jobState) {
@@ -581,8 +615,12 @@ export const Orchestrator = {
                 merged[merged.hasOwnProperty(key) ? `Detail_${key}` : key] = detailRow[key];
             }
             this.state.scrapedData.push(merged);
+            this.state.unsavedRowsCount = (this.state.unsavedRowsCount || 0) + 1;
         });
-        await DataStore.set({ scrapedData: this.state.scrapedData });
+        if (this.state.unsavedRowsCount >= 50) {
+            await DataStore.set({ scrapedData: this.state.scrapedData });
+            this.state.unsavedRowsCount = 0;
+        }
     },
 
     sleep(ms) { return new Promise(r => setTimeout(r, ms)); },

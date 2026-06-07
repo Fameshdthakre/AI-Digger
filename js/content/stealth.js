@@ -6,7 +6,7 @@
 window.StealthHelper = {
     async simulateHuman(level = 'advanced') {
         if (level === 'none') return;
-        
+
         await this.randomScroll();
         if (level === 'advanced') {
             await this.mouseJitter();
@@ -17,7 +17,7 @@ window.StealthHelper = {
         const height = document.body.scrollHeight;
         const viewportHeight = window.innerHeight;
         const scrollTarget = Math.min(height - viewportHeight, Math.random() * 500 + 200);
-        
+
         return this.smoothScroll(scrollTarget);
     },
 

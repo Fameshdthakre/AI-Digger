@@ -75,8 +75,6 @@ async function handleMessage(message, sender, sendResponse) {
                 break;
 
             case 'PROCESS_AI_INSPECTOR':
-            case 'PROCESS_AI_WAND':
-            case 'PROCESS_AI_PARENT_WAND':
                 await handleAISelectorRequest(message, sendResponse);
                 break;
 
@@ -90,14 +88,22 @@ async function handleMessage(message, sender, sendResponse) {
         }
     } catch (error) {
         console.error("AI-Digger: Background Error", error);
-        sendResponse({ status: 'error', message: error.message });
+        sendResponse({ status: 'error', message: "An internal error occurred while processing your request." });
     }
 }
 
 async function handleAISelectorRequest(message, sendResponse) {
     const settings = (await DataStore.getSync(['aiSettings'])).aiSettings;
-    if (!settings) {
-        sendResponse({ status: 'error', message: 'AI not configured' });
+    const platform = settings?.aiPlatform || 'openai';
+    const isConfigured = settings && settings[platform] && settings[platform].key && settings[platform].key.trim() !== '';
+
+    if (!isConfigured) {
+        if (message.action === 'PROCESS_AI_INSPECTOR' && message.fallbackSelector) {
+            chrome.runtime.sendMessage({ action: 'AI_SELECTOR_RESULT', fieldId: message.fieldId, selector: message.fallbackSelector });
+            sendResponse({ status: 'fallback_used' });
+            return;
+        }
+        sendResponse({ status: 'error', message: 'AI not configured. Please add an API key in Settings.' });
         return;
     }
 
@@ -105,10 +111,6 @@ async function handleAISelectorRequest(message, sendResponse) {
     if (message.action === 'PROCESS_AI_INSPECTOR') {
         const template = message.isContainer ? PROMPTS.AI_INSPECTOR_CONTAINER : PROMPTS.AI_INSPECTOR;
         prompt = `${template}\n\nHTML Snippet:\n"""\n${message.htmlSnippet}\n"""`;
-    } else if (message.action === 'PROCESS_AI_WAND') {
-        prompt = `${PROMPTS.AI_WAND}\n\nUser Request: "${message.query}"\n\nPage HTML:\n"""\n${message.html.substring(0, 15000)}\n"""`;
-    } else if (message.action === 'PROCESS_AI_PARENT_WAND') {
-        prompt = `${PROMPTS.AI_PARENT_WAND}\n\nUser Request: "${message.query}"\n\nPage HTML:\n"""\n${message.html.substring(0, 15000)}\n"""`;
     }
 
     try {
@@ -116,7 +118,13 @@ async function handleAISelectorRequest(message, sendResponse) {
         chrome.runtime.sendMessage({ action: 'AI_SELECTOR_RESULT', fieldId: message.fieldId, selector });
         sendResponse({ status: 'processing' });
     } catch (e) {
-        sendResponse({ status: 'error', message: e.message });
+        console.error("AI-Digger: AI Selector Error", e);
+        if (message.action === 'PROCESS_AI_INSPECTOR' && message.fallbackSelector) {
+            chrome.runtime.sendMessage({ action: 'AI_SELECTOR_RESULT', fieldId: message.fieldId, selector: message.fallbackSelector });
+            sendResponse({ status: 'fallback_used_after_error' });
+        } else {
+            sendResponse({ status: 'error', message: "Failed to generate AI selector. Please check your AI settings and try again." });
+        }
     }
 }
 

@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "AI Digger",
-  "version": "1.0.2",
+  "version": "1.0.4",
   "description": "A flexible, user-customizable web scraper with a visual inspector and anti-bot features.",
   "icons": {
     "16": "icons/icon16.png",
@@ -16,10 +16,7 @@
     "alarms"
   ],
   "host_permissions": [
-    "<all_urls>",
-    "https://api.openai.com/*",
-    "https://generativelanguage.googleapis.com/*",
-    "https://api.anthropic.com/*"
+    "<all_urls>"
   ],
   "background": {
     "service_worker": "background.js",
@@ -35,16 +32,5 @@
       "48": "icons/icon48.png",
       "128": "icons/icon128.png"
     }
-  },
-  "web_accessible_resources": [
-    {
-      "resources": [
-        "dashboard.html",
-        "css/sidepanel.css",
-        "ui/dashboard-page.js",
-        "modules/data-store.js"
-      ],
-      "matches": ["<all_urls>"]
-    }
-  ]
+  }
 }

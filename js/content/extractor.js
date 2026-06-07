@@ -18,7 +18,7 @@ if (!window.aiDiggerExtractorLoaded) {
             box.style.zIndex = '1000000';
             box.style.pointerEvents = 'none';
             box.style.transition = 'all 0.3s ease';
-            
+
             if (label) {
                 const tag = document.createElement('div');
                 tag.innerText = label;
@@ -38,7 +38,7 @@ if (!window.aiDiggerExtractorLoaded) {
         }
     };
 
-    window.formatValue = function(val, formatType) {
+    window.formatValue = function (val, formatType) {
         if (!val || typeof val !== 'string') return val;
 
         switch (formatType) {
@@ -57,7 +57,7 @@ if (!window.aiDiggerExtractorLoaded) {
         }
     };
 
-    window.waitForElement = function(rawSelector, timeoutMs = 15000) {
+    window.waitForElement = function (rawSelector, timeoutMs = 15000) {
         return new Promise((resolve) => {
             const selectors = resolveSelectorArray(rawSelector);
 
@@ -81,19 +81,19 @@ if (!window.aiDiggerExtractorLoaded) {
         });
     };
 
-    window.resolveSelectorArray = function(rawSelector) {
+    window.resolveSelectorArray = function (rawSelector) {
         if (!rawSelector) return [];
         let arr = [];
         try {
             arr = JSON.parse(rawSelector);
             if (!Array.isArray(arr)) arr = [arr];
-        } catch(e) {
+        } catch (e) {
             arr = [{ type: 'css', val: rawSelector }];
         }
         return arr;
     };
 
-    window.findPageElements = function(rawSelector, contextNode = document) {
+    window.findPageElements = function (rawSelector, contextNode = document) {
         const selectors = resolveSelectorArray(rawSelector);
         let elements = [];
         for (let selObj of selectors) {
@@ -107,17 +107,17 @@ if (!window.aiDiggerExtractorLoaded) {
                     elements = Array.from(contextNode.querySelectorAll(selector));
                 }
                 if (elements.length > 0) break;
-            } catch (e) {}
+            } catch (e) { }
         }
         return elements;
     };
 
-    window.findPageElement = function(rawSelector, contextNode = document) {
+    window.findPageElement = function (rawSelector, contextNode = document) {
         const elements = findPageElements(rawSelector, contextNode);
         return elements.length > 0 ? elements[0] : null;
     };
 
-    window.extractFieldData = function(field, contextNode = document) {
+    window.extractFieldData = function (field, contextNode = document) {
         if (field.type === 'ai') return null;
 
         try {
@@ -158,7 +158,7 @@ if (!window.aiDiggerExtractorLoaded) {
         }
     };
 
-    window.executeExtraction = function(blueprint) {
+    window.executeExtraction = function (blueprint) {
         let result = {};
         let needsAi = false;
         let failedFieldsGlobal = [];
@@ -198,9 +198,9 @@ if (!window.aiDiggerExtractorLoaded) {
                             containers = Array.from(document.querySelectorAll(selector));
                         }
                         if (containers.length > 0) break;
-                    } catch(e) {}
+                    } catch (e) { }
                 }
-            } catch(e) {
+            } catch (e) {
                 console.error("Container selector failed", e);
             }
 

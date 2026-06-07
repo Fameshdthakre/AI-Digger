@@ -3,7 +3,7 @@
  * Logic for pre-extraction macros.
  */
 
-import { ensureScripts } from './utils.js';
+import { ensureScripts, safeSendTab, showToast } from './utils.js';
 
 let actionCount = 0;
 const actionsContainer = document.getElementById('actions-container');
@@ -28,8 +28,6 @@ export const ActionsManager = {
                     <option value="type" ${type === 'type' ? 'selected' : ''}>Type Text</option>
                     <option value="wait" ${type === 'wait' ? 'selected' : ''}>Wait For</option>
                 </select>
-                <button class="btn-wand" title="Describe to AI">🪄</button>
-                <button class="btn-parent-wand" title="Find Parent Container with AI">📦</button>
                 <button class="inspect-btn a-inspect" title="Inspect Selector">🔍</button>
                 <button class="test-btn a-test" title="Test Action">🧪</button>
                 <input type="text" placeholder="CSS or XPath Selector" class="a-selector" value="${selector}" style="flex: 1;" />
@@ -64,6 +62,9 @@ export const ActionsManager = {
 
         actionsContainer.appendChild(div);
         triggerUpdate();
+        if (typeof window.updateAiFeatureState === 'function') {
+            window.updateAiFeatureState();
+        }
     },
 
     async testAction(div) {
@@ -71,21 +72,26 @@ export const ActionsManager = {
         if (!selector) return;
         const testBtn = div.querySelector('.a-test');
         testBtn.innerText = '⏳';
+
         const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
-        await ensureScripts(tab.id);
-        chrome.tabs.sendMessage(tab.id, { action: 'TEST_SELECTOR', field: { selector, type: 'css', extractType: 'exists' } }, (res) => {
+        const injected = await ensureScripts(tab.id);
+        if (!injected) { testBtn.innerText = '🧪'; return; }
+
+        safeSendTab(tab.id, { action: 'TEST_SELECTOR', field: { selector, type: 'css', extractType: 'exists' } }, (res) => {
             testBtn.innerText = '🧪';
             const preview = div.querySelector('.a-preview');
             preview.style.display = 'block';
             preview.innerText = res?.result ? "Element found!" : "Element not found.";
             preview.style.color = res?.result ? '#10b981' : '#ef4444';
-        });
+        }, { resetBtn: testBtn, resetIcon: '🧪' });
     },
 
     async startInspector(fieldId) {
         const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
-        await ensureScripts(tab.id);
-        chrome.tabs.sendMessage(tab.id, { action: 'START_INSPECTOR_FOR_FIELD', fieldId, mode: 'css' }, (res) => {
+        const injected = await ensureScripts(tab.id);
+        if (!injected) return;
+
+        safeSendTab(tab.id, { action: 'START_INSPECTOR_FOR_FIELD', fieldId, mode: 'css' }, (res) => {
             if (res?.status === 'inspector_started') {
                 const btn = document.getElementById(fieldId).querySelector('.a-inspect');
                 btn.style.backgroundColor = 'var(--magic-bg)';
@@ -102,7 +108,15 @@ export const ActionsManager = {
         btn.style.backgroundColor = this.isRecording ? '#fee2e2' : 'transparent';
 
         const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
-        await ensureScripts(tab.id);
-        chrome.tabs.sendMessage(tab.id, { action: 'TOGGLE_MACRO_RECORDING', isRecording: this.isRecording });
+        const injected = await ensureScripts(tab.id);
+        if (!injected) {
+            // Revert toggle state if injection failed
+            this.isRecording = !this.isRecording;
+            btn.innerText = this.isRecording ? '⏹ Stop Recording' : '🔴 Record Actions';
+            btn.style.backgroundColor = this.isRecording ? '#fee2e2' : 'transparent';
+            return;
+        }
+
+        safeSendTab(tab.id, { action: 'TOGGLE_MACRO_RECORDING', isRecording: this.isRecording }, () => {});
     }
 };

@@ -366,7 +366,82 @@ export const JobsUIManager = {
         this.updateDropdowns(blueprint.jobName);
         chrome.runtime.sendMessage({ action: 'UPDATE_SCHEDULES' });
         showToast("Job Saved!");
-    }
+    },
 
-    // ... (implement clone, delete, export, import)
+    cloneJob() {
+        const jobName = document.getElementById('saved-jobs-select')?.value;
+        if (!jobName || !this.savedJobs[jobName]) {
+            return showToast("Please select a job to clone.", "info");
+        }
+        let clonedName = jobName;
+        if (clonedName.startsWith("[Template] ")) {
+            clonedName = clonedName.replace("[Template] ", "Copy of ");
+        } else {
+            clonedName = `Copy of ${clonedName}`;
+        }
+        document.getElementById('job-name').value = clonedName;
+        document.getElementById('saved-jobs-select').value = "";
+        showToast("Job cloned successfully! You can now save it.", "success");
+    },
+
+    deleteJob() {
+        const jobName = document.getElementById('saved-jobs-select')?.value;
+        if (!jobName || !this.savedJobs[jobName]) return showToast("Please select a job to delete.", "info");
+        
+        if (confirm(`Are you sure you want to delete "${jobName}"?`)) {
+            delete this.savedJobs[jobName];
+            const jobsToSave = { ...this.savedJobs };
+            Object.keys(DEFAULT_RECIPES).forEach(k => delete jobsToSave[k]);
+            chrome.storage.local.set({ savedJobs: jobsToSave }, () => {
+                this.updateDropdowns();
+                this.resetUI();
+                showToast("Job deleted.", "success");
+            });
+        }
+    },
+
+    exportJob() {
+        const jobName = document.getElementById('saved-jobs-select')?.value;
+        if (!jobName || !this.savedJobs[jobName]) return showToast("Please select a saved job to export.", "info");
+        
+        const blueprint = this.savedJobs[jobName];
+        const blob = new Blob([JSON.stringify(blueprint, null, 2)], { type: 'application/json' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `${jobName.replace(/[^a-z0-9]/gi, '_')}_blueprint.json`;
+        document.body.appendChild(a);
+        a.click();
+        setTimeout(() => { document.body.removeChild(a); URL.revokeObjectURL(url); }, 100);
+        showToast("Job exported successfully!", "success");
+    },
+
+    importJob(e) {
+        const file = e.target.files[0];
+        if (!file) return;
+
+        const reader = new FileReader();
+        reader.onload = (event) => {
+            try {
+                const importedBlueprint = JSON.parse(event.target.result);
+                if (!importedBlueprint.jobName || !importedBlueprint.fields || !Array.isArray(importedBlueprint.fields)) {
+                    throw new Error("Invalid blueprint format.");
+                }
+
+                this.savedJobs[importedBlueprint.jobName] = importedBlueprint;
+                const jobsToSave = { ...this.savedJobs };
+                Object.keys(DEFAULT_RECIPES).forEach(k => delete jobsToSave[k]);
+                
+                chrome.storage.local.set({ savedJobs: jobsToSave }, () => {
+                    this.updateDropdowns(importedBlueprint.jobName);
+                    this.loadJobToUI(importedBlueprint.jobName);
+                    showToast("Job imported successfully!", "success");
+                });
+            } catch (err) {
+                showToast("Invalid JSON file.", "error");
+            }
+            e.target.value = '';
+        };
+        reader.readAsText(file);
+    }
 };

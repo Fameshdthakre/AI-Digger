@@ -3,7 +3,7 @@
  * Logic for dynamic field rows and inspector integration.
  */
 
-import { showToast } from './utils.js';
+import { showToast, ensureScripts, safeSendTab } from './utils.js';
 
 let fieldCount = 0;
 const fieldsContainer = document.getElementById('fields-container');
@@ -11,7 +11,7 @@ const fieldsContainer = document.getElementById('fields-container');
 export const FieldsManager = {
     init() {
         document.getElementById('add-field')?.addEventListener('click', () => this.addFieldRow());
-        document.getElementById('inspect-container-btn')?.addEventListener('click', () => this.startInspector('item-container-selector'));
+        document.getElementById('inspect-container-btn')?.addEventListener('click', () => this.startInspector('item-container-selector', 'parent'));
         document.getElementById('test-container-btn')?.addEventListener('click', () => this.testSelector('item-container-selector', 'count'));
         document.getElementById('inspect-next-btn')?.addEventListener('click', () => this.startInspector('next-button-selector'));
         document.getElementById('test-next-btn')?.addEventListener('click', () => this.testSelector('next-button-selector', 'exists'));
@@ -27,7 +27,7 @@ export const FieldsManager = {
             }
         };
 
-        ['item-container-selector', 'wait-for-selector', 'max-wait-ms', 'next-button-selector', 'enable-stealth-mode', 'stealth-level', 'min-delay', 'max-delay', 'enable-schedule', 'schedule-interval', 'scrape-mode'].forEach(id => {
+        ['item-container-selector', 'wait-for-selector', 'max-wait-ms', 'next-button-selector', 'enable-stealth-mode', 'stealth-level', 'min-delay', 'max-delay', 'enable-schedule', 'schedule-interval', 'scrape-mode', 'enable-infinite-scroll', 'schedule-target-mode'].forEach(id => {
             const el = document.getElementById(id);
             if (el) {
                 el.addEventListener('input', triggerUpdate);
@@ -43,7 +43,7 @@ export const FieldsManager = {
         div.className = 'field-row';
         div.id = fieldId;
         div.innerHTML = `
-            <div class="field-row-top">
+            <div class="field-row-top" style="margin-bottom: 8px;">
                 <label class="checkbox-label" style="width: auto; margin-right: 4px;" title="Set as Primary Key">
                     <input type="radio" name="primary-key-radio" class="f-primary-key" ${fieldCount === 1 ? 'checked' : ''} /> PK
                 </label>
@@ -51,13 +51,16 @@ export const FieldsManager = {
                     <input type="radio" name="detail-url-radio" class="f-detail-url" /> URL
                 </label>
                 <input type="text" placeholder="Field Name" class="f-name" value="${name}" style="flex: 1;" />
+                <button class="remove-field" title="Remove Field">🗑️</button>
+            </div>
+            <div class="field-row-top" style="margin-bottom: 8px;">
                 <select class="f-type" style="width: 100px;">
                     <option value="css" ${type === 'css' ? 'selected' : ''}>CSS</option>
                     <option value="xpath" ${type === 'xpath' ? 'selected' : ''}>XPath</option>
                     <option value="ai" ${type === 'ai' ? 'selected' : ''}>AI Prompt</option>
                     <option value="vision" ${type === 'vision' ? 'selected' : ''}>AI Vision</option>
                 </select>
-                <select class="f-extract-target" style="width: 120px; ${type === 'ai' ? 'display: none;' : ''}">
+                <select class="f-extract-target" style="flex: 1; ${type === 'ai' ? 'display: none;' : ''}">
                     <option value="text" ${extractType === 'text' ? 'selected' : ''}>Text (innerText)</option>
                     <option value="html" ${extractType === 'html' ? 'selected' : ''}>HTML (innerHTML)</option>
                     <option value="href" ${extractType === 'href' ? 'selected' : ''}>Link (href)</option>
@@ -65,18 +68,15 @@ export const FieldsManager = {
                     <option value="attribute" ${extractType === 'attribute' ? 'selected' : ''}>Custom Attribute</option>
                 </select>
                 <input type="text" class="f-attr-name" placeholder="attr name" value="${attrName}" style="width: 80px; ${extractType === 'attribute' ? '' : 'display: none;'}" />
-                <select class="f-format" style="width: 110px;">
+                <select class="f-format" style="flex: 1;">
                     <option value="raw" ${format === 'raw' ? 'selected' : ''}>Raw Data</option>
                     <option value="numbers" ${format === 'numbers' ? 'selected' : ''}>Numbers Only</option>
                     <option value="letters" ${format === 'letters' ? 'selected' : ''}>Letters Only</option>
                     <option value="email" ${format === 'email' ? 'selected' : ''}>Extract Email</option>
                     <option value="trim" ${format === 'trim' ? 'selected' : ''}>Trim Whitespace</option>
                 </select>
-                <button class="remove-field" title="Remove Field">🗑️</button>
             </div>
             <div class="field-row-bottom">
-                <button class="btn-wand" title="Describe to AI" style="flex-shrink: 0; padding: 4px 8px; font-size: 14px; background: transparent; border: 1px solid var(--border); border-radius: 4px; border-top-right-radius: 0; border-bottom-right-radius: 0; cursor: pointer; border-right: none; ${type === 'ai' ? 'display: none;' : ''}">🪄</button>
-                <button class="btn-parent-wand" title="Find Parent Container with AI" style="flex-shrink: 0; padding: 4px 8px; font-size: 14px; background: transparent; border: 1px solid var(--border); border-radius: 4px; border-top-left-radius: 0; border-bottom-left-radius: 0; cursor: pointer; ${type === 'ai' ? 'display: none;' : ''}">📦</button>
                 <button class="inspect-btn" title="Inspect Selector" style="${type === 'ai' ? 'display: none;' : ''}">🔍</button>
                 <button class="test-btn" title="Test Selector" style="${type === 'ai' ? 'display: none;' : ''}">🧪</button>
                 <input type="text" placeholder="CSS Selector, XPath, or AI Prompt" class="f-selector" value="${selector}" style="flex: 1;" />
@@ -130,12 +130,17 @@ export const FieldsManager = {
 
         fieldsContainer.appendChild(div);
         this.updateUISafeguards();
+        if (typeof window.updateAiFeatureState === 'function') {
+            window.updateAiFeatureState();
+        }
     },
 
     async startInspector(fieldId, mode = 'css') {
         const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
-        await this.ensureScripts(tab.id);
-        chrome.tabs.sendMessage(tab.id, { action: 'START_INSPECTOR_FOR_FIELD', fieldId, mode }, (res) => {
+        const injected = await ensureScripts(tab.id);
+        if (!injected) return;
+
+        safeSendTab(tab.id, { action: 'START_INSPECTOR_FOR_FIELD', fieldId, mode }, (res) => {
             if (res?.status === 'inspector_started') {
                 const btn = document.getElementById(fieldId)?.querySelector('.inspect-btn') || 
                             document.getElementById(`inspect-${fieldId.replace('-selector', '').replace('item-container', 'container').replace('next-button', 'next')}-btn`);
@@ -165,8 +170,10 @@ export const FieldsManager = {
         };
 
         const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
-        await this.ensureScripts(tab.id);
-        chrome.tabs.sendMessage(tab.id, { action: 'TEST_SELECTOR', field: fieldData }, (response) => {
+        const injected = await ensureScripts(tab.id);
+        if (!injected) { testBtn.innerText = '🧪'; return; }
+
+        safeSendTab(tab.id, { action: 'TEST_SELECTOR', field: fieldData }, (response) => {
             testBtn.innerText = '🧪';
             const previewBox = div.querySelector('.preview-box');
             previewBox.style.display = 'block';
@@ -177,7 +184,7 @@ export const FieldsManager = {
                 previewBox.style.color = '#ef4444';
                 previewBox.innerText = "No results found.";
             }
-        });
+        }, { resetBtn: testBtn, resetIcon: '🧪' });
     },
 
     async testSelector(inputId, extractType) {
@@ -190,13 +197,14 @@ export const FieldsManager = {
         if (testBtn) testBtn.innerText = '⏳';
 
         const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
-        await this.ensureScripts(tab.id);
+        const injected = await ensureScripts(tab.id);
+        if (!injected) { if (testBtn) testBtn.innerText = '🧪'; return; }
 
         // Auto-detect type if not specified
         const type = (selector.startsWith('//') || selector.startsWith('(') || selector.startsWith('xpath:')) ? 'xpath' : 'css';
         const cleanSelector = selector.replace(/^xpath:\s*/, '');
 
-        chrome.tabs.sendMessage(tab.id, { 
+        safeSendTab(tab.id, { 
             action: 'TEST_SELECTOR', 
             field: { selector: cleanSelector, type, extractType } 
         }, (response) => {
@@ -213,15 +221,10 @@ export const FieldsManager = {
                     previewBox.style.color = response?.result ? '#10b981' : '#ef4444';
                 }
             }
-        });
+        }, { resetBtn: testBtn, resetIcon: '🧪' });
     },
 
-    async ensureScripts(tabId) {
-        await chrome.scripting.executeScript({
-            target: { tabId },
-            files: ['turndown.js', 'js/content/inspector.js', 'js/content/macros.js', 'js/content/auto-detect.js', 'js/content/extractor.js', 'js/content/main.js']
-        }).catch(() => null);
-    },
+
 
     updateUISafeguards() {
         const containerInput = document.getElementById('item-container-selector');
@@ -241,6 +244,54 @@ export const FieldsManager = {
         
         const maxItemsGroup = document.getElementById('max-items-group');
         if (maxItemsGroup) maxItemsGroup.style.display = hasContainer ? 'flex' : 'none';
+
+        // Scraping Mode Toggles
+        const scrapeMode = document.getElementById('scrape-mode');
+        if (scrapeMode) {
+            const isMulti = scrapeMode.value === 'multi-url';
+            const urlListGroup = document.getElementById('url-list-group');
+            if (urlListGroup) urlListGroup.style.display = isMulti ? 'block' : 'none';
+            
+            const batchSettingsGroup = document.getElementById('batch-settings-group');
+            if (batchSettingsGroup) batchSettingsGroup.style.display = isMulti ? 'flex' : 'none';
+            
+            const singlePageSettings = document.getElementById('single-page-settings');
+            if (singlePageSettings) singlePageSettings.style.display = isMulti ? 'none' : 'block';
+        }
+
+        // Infinite Scroll Toggle
+        const enableInfiniteScroll = document.getElementById('enable-infinite-scroll');
+        const scrollsContainer = document.getElementById('scrolls-container');
+        if (enableInfiniteScroll && scrollsContainer) {
+            scrollsContainer.style.display = enableInfiniteScroll.checked ? 'block' : 'none';
+        }
+
+        // Stealth Mode Toggle
+        const stealthCheckbox = document.getElementById('enable-stealth-mode');
+        const stealthOptions = document.getElementById('stealth-options');
+        if (stealthCheckbox && stealthOptions) {
+            stealthOptions.style.display = stealthCheckbox.checked ? 'block' : 'none';
+        }
+
+        // Schedule Toggles
+        const enableSchedule = document.getElementById('enable-schedule');
+        const scheduleIntervalGroup = document.getElementById('schedule-interval-group');
+        const scheduleTargetGroup = document.getElementById('schedule-target-group');
+        if (enableSchedule) {
+            const isEnabled = enableSchedule.checked;
+            if (scheduleIntervalGroup) scheduleIntervalGroup.style.display = isEnabled ? 'block' : 'none';
+            if (scheduleTargetGroup) scheduleTargetGroup.style.display = isEnabled ? 'block' : 'none';
+
+            if (isEnabled) {
+                const scheduleTargetMode = document.getElementById('schedule-target-mode');
+                const scheduleStartUrlGroup = document.getElementById('schedule-start-url-group');
+                const scheduleMultipleUrlsGroup = document.getElementById('schedule-multiple-urls-group');
+                if (scheduleTargetMode) {
+                    if (scheduleStartUrlGroup) scheduleStartUrlGroup.style.display = scheduleTargetMode.value === 'start-url' ? 'block' : 'none';
+                    if (scheduleMultipleUrlsGroup) scheduleMultipleUrlsGroup.style.display = scheduleTargetMode.value === 'multiple-urls' ? 'block' : 'none';
+                }
+            }
+        }
 
         // Note: We DO NOT disable PK anymore, as it's needed for deduplication even in scoped mode.
         

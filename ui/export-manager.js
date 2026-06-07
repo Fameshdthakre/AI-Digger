@@ -52,14 +52,31 @@ export const ExportManager = {
         this.triggerDownload(blob, filename);
     },
 
-    downloadExcel(data, filename) {
-        if (typeof XLSX === 'undefined') return showToast("Excel library missing", "error");
+    async downloadExcel(data, filename) {
+        if (typeof XLSX === 'undefined') {
+            try {
+                showToast("Loading Excel library...", "info");
+                await this.loadScript('../xlsx.full.min.js');
+            } catch (e) {
+                return showToast("Failed to load Excel library", "error");
+            }
+        }
         const worksheet = XLSX.utils.json_to_sheet(data);
         const workbook = XLSX.utils.book_new();
         XLSX.utils.book_append_sheet(workbook, worksheet, "Data");
         const buffer = XLSX.write(workbook, { bookType: 'xlsx', type: 'array' });
         const blob = new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
         this.triggerDownload(blob, filename);
+    },
+
+    loadScript(src) {
+        return new Promise((resolve, reject) => {
+            const script = document.createElement('script');
+            script.src = src;
+            script.onload = resolve;
+            script.onerror = reject;
+            document.head.appendChild(script);
+        });
     },
 
     triggerDownload(blob, filename) {

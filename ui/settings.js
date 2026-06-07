@@ -20,7 +20,7 @@ export const SettingsManager = {
                 const input = document.getElementById(targetId);
                 const isPassword = input.type === 'password';
                 input.type = isPassword ? 'text' : 'password';
-                e.currentTarget.innerText = isPassword ? '👁️' : '🙈';
+                e.currentTarget.innerText = isPassword ? '👁️' : '🔒';
             });
         });
 
@@ -76,6 +76,21 @@ export const SettingsManager = {
                     document.getElementById('model-claude').value = s.claude.model || 'claude-3-5-sonnet-20241022';
                 }
             }
+        });
+    },
+
+    async isAiConfigured() {
+        return new Promise(resolve => {
+            chrome.storage.sync.get(['aiSettings'], (result) => {
+                const s = result.aiSettings;
+                if (!s) return resolve(false);
+                const platform = s.aiPlatform || 'openai';
+                if (s[platform] && s[platform].key && s[platform].key.trim() !== '') {
+                    resolve(true);
+                } else {
+                    resolve(false);
+                }
+            });
         });
     }
 };

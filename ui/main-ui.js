@@ -9,7 +9,7 @@ import { SettingsManager } from './settings.js';
 import { DashboardManager } from './dashboard-manager.js';
 import { JobsUIManager } from './jobs-manager.js';
 import { ExportManager } from './export-manager.js';
-import { showToast, ensureScripts } from './utils.js';
+import { showToast, ensureScripts, safeSendTab } from './utils.js';
 
 document.addEventListener('DOMContentLoaded', async () => {
     // Initialize All Managers
@@ -25,28 +25,62 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     setupTabNavigation();
     setupMainButtons();
-    setupAntiBotEvents();
+    FieldsManager.updateUISafeguards();
     setupMessageListeners();
     updateAppInfo();
+    setupFeedbackLink("#btn-feedback");
+
+    window.updateAiFeatureState = updateAiFeatureState;
+    await updateAiFeatureState();
+    chrome.storage.onChanged.addListener((changes, area) => {
+        if (area === 'sync' && changes.aiSettings) {
+            updateAiFeatureState();
+        }
+    });
 });
 
-function setupAntiBotEvents() {
-    const stealthCheckbox = document.getElementById('enable-stealth-mode');
-    const stealthOptions = document.getElementById('stealth-options');
+export async function updateAiFeatureState() {
+    const isConfigured = await SettingsManager.isAiConfigured();
     
-    stealthCheckbox?.addEventListener('change', (e) => {
-        if (stealthOptions) stealthOptions.style.display = e.target.checked ? 'block' : 'none';
+    // Disable Magic Build
+    const magicBuildBtn = document.getElementById('btn-generate-blueprint');
+    if (magicBuildBtn) {
+        magicBuildBtn.disabled = !isConfigured;
+        if (!isConfigured) {
+            magicBuildBtn.title = "Configure AI API Key in Settings to enable Magic Build";
+            magicBuildBtn.style.opacity = '0.5';
+            magicBuildBtn.style.cursor = 'not-allowed';
+        } else {
+            magicBuildBtn.title = "Generate extraction blueprint using AI";
+            magicBuildBtn.style.opacity = '1';
+            magicBuildBtn.style.cursor = 'pointer';
+        }
+    }
+
+    // Disable AI options in f-type
+    document.querySelectorAll('.f-type').forEach(select => {
+        let changed = false;
+        Array.from(select.options).forEach(opt => {
+            if (opt.value === 'ai' || opt.value === 'vision') {
+                opt.disabled = !isConfigured;
+            }
+        });
+        if (!isConfigured && (select.value === 'ai' || select.value === 'vision')) {
+            select.value = 'css';
+            changed = true;
+        }
+        if (changed) {
+            select.dispatchEvent(new Event('change'));
+        }
     });
 }
+
 
 function setupTabNavigation() {
     const tabs = document.querySelectorAll('.tab');
     tabs.forEach(tab => {
         tab.addEventListener('click', () => {
-            if (tab.id === 'tab-dashboard') {
-                chrome.tabs.create({ url: chrome.runtime.getURL('dashboard.html') });
-                return;
-            }
+
             const target = tab.getAttribute('data-target');
             document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
             document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
@@ -57,63 +91,6 @@ function setupTabNavigation() {
 }
 
 function setupMainButtons() {
-    // Global Listener for Wand Clicks (AI Selector Generation)
-    document.addEventListener('click', async (e) => {
-        const wandBtn = e.target.closest('.btn-wand');
-        if (wandBtn) {
-            let fieldId;
-            if (wandBtn.id === 'wand-item-container-btn') fieldId = 'item-container-selector';
-            else if (wandBtn.id === 'wand-next-button-btn') fieldId = 'next-button-selector';
-            else if (wandBtn.id === 'wand-scroll-container-btn') fieldId = 'scroll-container-selector';
-            else {
-                const row = wandBtn.closest('.field-row') || wandBtn.closest('.action-row');
-                if (!row) return;
-                fieldId = row.id;
-            }
-
-            if (!fieldId) return;
-
-            const query = prompt("What element do you want to find here? (e.g., 'The main product container' or 'The next page button')");
-            if (!query) return;
-
-            wandBtn.innerText = '⏳';
-            const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
-            await ensureScripts(tab.id);
-
-            chrome.tabs.sendMessage(tab.id, { action: 'GET_PAGE_TEXT' }, (response) => {
-                if (chrome.runtime.lastError || !response?.text) {
-                    wandBtn.innerText = '🪄';
-                    return showToast("Could not read page content.", "error");
-                }
-                chrome.runtime.sendMessage({ action: 'PROCESS_AI_WAND', fieldId, query, html: response.text });
-            });
-        }
-
-        const parentWandBtn = e.target.closest('.btn-parent-wand');
-        if (parentWandBtn) {
-            let fieldId;
-            if (parentWandBtn.id === 'parent-item-container-btn' || parentWandBtn.closest('#item-container-selector-row')) {
-                fieldId = 'item-container-selector';
-            } else {
-                const row = parentWandBtn.closest('.field-row') || parentWandBtn.closest('.action-row');
-                if (!row) return;
-                fieldId = row.id;
-            }
-
-            if (!fieldId) return;
-
-            const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
-            await ensureScripts(tab.id);
-
-            chrome.tabs.sendMessage(tab.id, { action: 'START_INSPECTOR_FOR_FIELD', fieldId, mode: 'parent' }, (res) => {
-                if (res?.status === 'inspector_started') {
-                    parentWandBtn.style.backgroundColor = 'var(--magic-bg)';
-                    parentWandBtn.innerText = '🎯';
-                }
-            });
-        }
-    });
-
     document.getElementById('btn-start')?.addEventListener('click', async () => {
         const blueprint = FieldsManager.getBlueprintFromUI();
         const append = document.getElementById('append-data-toggle').checked;
@@ -127,6 +104,30 @@ function setupMainButtons() {
 
     document.getElementById('btn-stop')?.addEventListener('click', () => {
         chrome.runtime.sendMessage({ action: 'STOP_JOB' });
+    });
+
+    // Smart Container Scan
+    document.getElementById('btn-auto-detect')?.addEventListener('click', async () => {
+        const btn = document.getElementById('btn-auto-detect');
+        btn.innerText = '⏳ Scanning...';
+        btn.disabled = true;
+
+        const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+        const injected = await ensureScripts(tab.id);
+        if (!injected) {
+            btn.innerText = '🎯 Smart Container Scan';
+            btn.disabled = false;
+            return;
+        }
+
+        safeSendTab(tab.id, { action: 'START_AUTO_DETECT' }, (res) => {
+            // The actual result comes via AUTO_DETECT_RESULT message
+            if (res?.status !== 'started') {
+                btn.innerText = '🎯 Smart Container Scan';
+                btn.disabled = false;
+                showToast('Failed to start auto-detect.', 'error');
+            }
+        }, { resetBtn: btn, resetIcon: '🎯 Smart Container Scan' });
     });
 
     document.getElementById('btn-clear')?.addEventListener('click', () => {
@@ -144,9 +145,14 @@ function setupMainButtons() {
         btn.disabled = true;
 
         const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
-        await ensureScripts(tab.id);
+        const injected = await ensureScripts(tab.id);
+        if (!injected) {
+            btn.innerText = 'Generate Blueprint';
+            btn.disabled = false;
+            return;
+        }
 
-        chrome.tabs.sendMessage(tab.id, { action: 'GET_PAGE_TEXT' }, (res) => {
+        safeSendTab(tab.id, { action: 'GET_PAGE_TEXT' }, (res) => {
             if (res?.text) {
                 chrome.runtime.sendMessage({ action: 'MAGIC_BUILD_BLUEPRINT', userPrompt: promptText, pageText: res.text });
             } else {
@@ -154,7 +160,7 @@ function setupMainButtons() {
                 btn.disabled = false;
                 showToast("Could not read page content.", "error");
             }
-        });
+        }, { resetBtn: btn, resetIcon: 'Generate Blueprint' });
     });
 }
 
@@ -168,36 +174,69 @@ function setupMessageListeners() {
             btn.disabled = false;
 
             if (msg.blueprint) {
-                JobsUIManager.loadJobToUI(null, msg.blueprint); // Pass null for name to indicate it's a new draft
+                JobsUIManager.loadJobToUI(null, msg.blueprint);
                 showToast("Magic Build Complete!");
             } else {
                 showToast(msg.error || "Magic Build failed", "error");
             }
         } else if (msg.action === 'INSPECTOR_RESULT') {
             handleInspectorResult(msg);
+        } else if (msg.action === 'AUTO_DETECT_RESULT') {
+            // Reset the Smart Container Scan button
+            const btn = document.getElementById('btn-auto-detect');
+            if (btn) { btn.innerText = '🎯 Smart Container Scan'; btn.disabled = false; }
+
+            if (msg.fields && msg.fields.length > 0) {
+                // Clear existing fields and add detected ones
+                document.getElementById('fields-container').innerHTML = '';
+                msg.fields.forEach(f => {
+                    FieldsManager.addFieldRow(f.name || '', f.selector || '', 'css', f.extractType || 'text');
+                });
+                showToast(`Detected ${msg.fields.length} field(s)!`, 'success');
+            } else if (msg.status !== 'stopped') {
+                showToast('No fields detected. Try clicking a different element.', 'info');
+            }
+        } else if (msg.action === 'INSPECTOR_CANCELLED') {
+            // Reset inspect buttons on dynamic field/action rows
+            const row = document.getElementById(msg.fieldId);
+            if (row) {
+                const inspectBtn = row.querySelector('.inspect-btn') || row.querySelector('.a-inspect');
+                if (inspectBtn) { inspectBtn.innerText = '🔍'; inspectBtn.style.backgroundColor = ''; }
+            }
+            // Reset fixed selector buttons (container, next, scroll)
+            const fixedBtnMap = {
+                'item-container-selector': 'inspect-container-btn',
+                'next-button-selector': 'inspect-next-btn',
+                'scroll-container-selector': 'inspect-scroll-container-btn'
+            };
+            const fixedBtnId = fixedBtnMap[msg.fieldId];
+            if (fixedBtnId) {
+                const btn = document.getElementById(fixedBtnId);
+                if (btn) { btn.innerText = '🔍'; btn.style.backgroundColor = ''; }
+            }
         }
     });
 }
 
 function handleSelectorResult(msg) {
-    let input, wandBtn;
+    let input;
     if (msg.fieldId === 'item-container-selector') {
         input = document.getElementById('item-container-selector');
-        wandBtn = document.getElementById('wand-item-container-btn');
     } else {
         const row = document.getElementById(msg.fieldId);
         if (row) {
             input = row.querySelector('.f-selector') || row.querySelector('.a-selector');
-            wandBtn = row.querySelector('.btn-wand');
         }
     }
 
-    if (input) {
+    if (input && msg.selector) {
         input.value = msg.selector;
-        input.dispatchEvent(new Event('input'));
-        showToast("AI Selector Generated!");
+        input.dispatchEvent(new Event('input', { bubbles: true }));
+        input.dispatchEvent(new Event('change', { bubbles: true }));
+        showToast("Selector acquired!", "success");
+    } else {
+        showToast("Failed to acquire selector.", "error");
     }
-    if (wandBtn) wandBtn.innerText = '🪄';
 }
 
 function handleInspectorResult(msg) {
@@ -234,3 +273,32 @@ function updateAppInfo() {
     const badge = document.getElementById('app-version-badge');
     if (badge) badge.innerText = `v${manifest.version}`;
 }
+
+/**
+ * Sets up the Feedback link logic
+ * @param {string} selector - CSS selector for the feedback link
+ */
+function setupFeedbackLink(selector = "#feedbackLink") {
+    const feedbackLink = document.querySelector(selector);
+    if (!feedbackLink) return;
+
+    feedbackLink.addEventListener("click", (e) => {
+        e.preventDefault();
+        const manifest = chrome.runtime.getManifest();
+        let appName = manifest.name;
+        if (chrome.i18n && chrome.i18n.getMessage) {
+            const i18nName = chrome.i18n.getMessage("appName");
+            if (i18nName) appName = i18nName;
+        }
+        const version = `${appName} ${manifest.version}`;
+        const baseUrl =
+            "https://docs.google.com/forms/d/e/1FAIpQLSeZ4zNH3_Jiov3JnTa5K2VXffCCkDSsh-KvK_h3kIxmbejoIg/viewform";
+        const versionFieldId = "entry.2030262534";
+        const params = new URLSearchParams();
+        params.append("usp", "pp_url");
+        if (versionFieldId) params.append(versionFieldId, version);
+        const finalUrl = `${baseUrl}?${params.toString()}`;
+        chrome.tabs.create({ url: finalUrl });
+    });
+}
+

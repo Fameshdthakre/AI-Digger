@@ -3,14 +3,27 @@
 var autoDetectActive = false;
 
 function handleAutoDetectKeyDown(e) {
-    if (e.key === 'Escape') {
+    if (e.key === 'Escape' && autoDetectActive) {
+        e.preventDefault();
+        e.stopPropagation();
         stopAutoDetect();
         chrome.runtime.sendMessage({ action: 'AUTO_DETECT_RESULT', status: 'stopped' });
     }
 }
 
 function startAutoDetect() {
-    if (overlayBox) overlayBox.remove();
+    // If inspector is active, shut it down first
+    if (typeof stopInspector === 'function' && inspectorActive) {
+        var fieldId = currentInspectFieldId;
+        stopInspector();
+        chrome.runtime.sendMessage({ action: 'INSPECTOR_CANCELLED', fieldId: fieldId });
+    }
+
+    // Clean up any existing overlay
+    if (overlayBox) {
+        overlayBox.remove();
+        overlayBox = null;
+    }
 
     autoDetectActive = true;
     document.body.style.cursor = 'crosshair';
@@ -35,7 +48,10 @@ function startAutoDetect() {
 function stopAutoDetect() {
     autoDetectActive = false;
     document.body.style.cursor = 'default';
-    if (overlayBox) overlayBox.remove();
+    if (overlayBox) {
+        overlayBox.remove();
+        overlayBox = null;
+    }
     const ui = document.getElementById('ai-digger-auto-ui');
     if (ui) ui.remove();
     document.removeEventListener('mouseover', handleAutoDetectMouseOver, true);
@@ -44,13 +60,12 @@ function stopAutoDetect() {
 }
 
 function handleAutoDetectMouseOver(e) {
-    if (!autoDetectActive) return;
+    if (!autoDetectActive || !overlayBox) return;
     const ui = document.getElementById('ai-digger-auto-ui');
     if (ui && ui.contains(e.target)) return;
 
     hoveredElement = e.target;
 
-    // Find closest container that has repeating children (like ul, grid, table, etc)
     const rect = hoveredElement.getBoundingClientRect();
     overlayBox.style.top = rect.top + 'px';
     overlayBox.style.left = rect.left + 'px';
@@ -72,8 +87,10 @@ function handleAutoDetectClick(e) {
     if (!e.ctrlKey && !e.metaKey) return;
 
     // Highlight
-    overlayBox.style.backgroundColor = 'rgba(34, 197, 94, 0.4)';
-    overlayBox.style.border = '3px solid #22c55e';
+    if (overlayBox) {
+        overlayBox.style.backgroundColor = 'rgba(34, 197, 94, 0.4)';
+        overlayBox.style.border = '3px solid #22c55e';
+    }
 
     // Simple heuristic: walk up the DOM to find a repeating container
     let itemContainer = hoveredElement;
@@ -88,11 +105,9 @@ function handleAutoDetectClick(e) {
 
     const fields = analyzeContainerForFields(itemContainer);
 
+    // Stop first, then send result
+    stopAutoDetect();
     chrome.runtime.sendMessage({ action: 'AUTO_DETECT_RESULT', fields: fields });
-
-    setTimeout(() => {
-        stopAutoDetect();
-    }, 300);
 }
 
 function analyzeContainerForFields(container) {
@@ -174,6 +189,10 @@ function analyzeContainerForFields(container) {
 }
 
 function createAutoDetectUIPanel() {
+    // Remove any existing panel first
+    var existing = document.getElementById('ai-digger-auto-ui');
+    if (existing) existing.remove();
+
     const ui = document.createElement('div');
     ui.id = 'ai-digger-auto-ui';
     ui.style.position = 'fixed';
@@ -193,5 +212,8 @@ function createAutoDetectUIPanel() {
         <button id="ai-digger-cancel-auto" style="background: white; color: #8b5cf6; border: none; padding: 6px 12px; border-radius: 4px; cursor: pointer; font-weight: bold; font-size: 12px;">Cancel</button>
     `;
     document.body.appendChild(ui);
-    document.getElementById('ai-digger-cancel-auto').addEventListener('click', stopAutoDetect);
+    document.getElementById('ai-digger-cancel-auto').addEventListener('click', function () {
+        stopAutoDetect();
+        chrome.runtime.sendMessage({ action: 'AUTO_DETECT_RESULT', status: 'stopped' });
+    });
 }

@@ -37,14 +37,7 @@ This element is a REPEATING ITEM CONTAINER (like a product card or article row).
 Write the most robust, semantic CSS selector to target ALL similar containers on the page.
 Do NOT use specific IDs or nth-child pseudo-classes that only target this single element. Use common structural classes (e.g., .product-card, .list-item).
 Output ONLY the raw CSS string, without the data-ai-target attribute.`,
-    AI_WAND: `You are an expert web scraper. I will provide a user's natural language request and a pruned HTML snippet.
-Write the most robust, semantic CSS selector that perfectly captures the requested element(s).
-Output ONLY the raw CSS string. DO NOT wrap it in markdown formatting or quotes.`,
-    AI_PARENT_WAND: `You are an expert web scraper. I will provide a user's natural language description of a repeating parent container (e.g. a product card, a list row).
-Analyze the pruned HTML to find the common wrapper element that encapsulates the described items.
-Write the most robust, semantic CSS selector that captures ALL instances of this repeating parent container.
-Avoid deeply nested structural paths; prioritize descriptive class names or stable attributes that signify the item container (like .product-item, .list-row, [data-component='card']).
-Output ONLY the raw CSS string. DO NOT wrap it in markdown formatting or quotes.`,
+
     VISION_EXTRACTION: `You are an expert visual data extraction agent. 
 Analyze the provided screenshot and extract the requested fields.
 Each field should be extracted based on its visual representation (e.g., icons, text in images, charts).

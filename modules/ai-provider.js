@@ -121,7 +121,7 @@ export const AIProvider = {
     async analyzePage(text, settings) {
         const truncatedText = text.substring(0, 20000);
         const prompt = `${PROMPTS.ANALYZE_PAGE}\n\nWebpage Text:\n"""\n${truncatedText}\n"""`;
-        
+
         let options = {};
         if (settings.aiPlatform === 'openai') {
             options.response_format = {

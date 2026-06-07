@@ -223,7 +223,7 @@ document.getElementById('test-container-btn').addEventListener('click', async ()
         extractType: 'count' // Special extract type handled in content script
     };
 
-    const [tab] = await chrome.tabs.query({active: true, currentWindow: true});
+    const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
     await chrome.scripting.executeScript({
         target: { tabId: tab.id },
         files: ['turndown.js', 'js/content/inspector.js', 'js/content/macros.js', 'js/content/auto-detect.js', 'js/content/extractor.js', 'js/content/main.js']
@@ -259,7 +259,7 @@ document.getElementById('test-scroll-container-btn').addEventListener('click', a
         extractType: 'exists'
     };
 
-    const [tab] = await chrome.tabs.query({active: true, currentWindow: true});
+    const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
     await chrome.scripting.executeScript({
         target: { tabId: tab.id },
         files: ['turndown.js', 'js/content/inspector.js', 'js/content/macros.js', 'js/content/auto-detect.js', 'js/content/extractor.js', 'js/content/main.js']
@@ -280,7 +280,7 @@ document.getElementById('test-scroll-container-btn').addEventListener('click', a
 });
 
 document.getElementById('inspect-scroll-container-btn').addEventListener('click', async () => {
-    const [tab] = await chrome.tabs.query({active: true, currentWindow: true});
+    const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
     await chrome.scripting.executeScript({ target: { tabId: tab.id }, files: ['turndown.js', 'js/content/inspector.js', 'js/content/macros.js', 'js/content/auto-detect.js', 'js/content/extractor.js', 'js/content/main.js'] }).catch(console.error);
 
     chrome.tabs.sendMessage(tab.id, { action: 'START_INSPECTOR_FOR_FIELD', fieldId: 'scroll-container-selector', mode: 'css' }, (response) => {
@@ -296,7 +296,7 @@ document.getElementById('inspect-scroll-container-btn').addEventListener('click'
 
 // Inspect Container Button
 document.getElementById('inspect-container-btn').addEventListener('click', async () => {
-    const [tab] = await chrome.tabs.query({active: true, currentWindow: true});
+    const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
     await chrome.scripting.executeScript({
         target: { tabId: tab.id },
         files: ['turndown.js', 'js/content/inspector.js', 'js/content/macros.js', 'js/content/auto-detect.js', 'js/content/extractor.js', 'js/content/main.js']
@@ -329,7 +329,7 @@ document.getElementById('test-next-btn').addEventListener('click', async () => {
         extractType: 'exists'
     };
 
-    const [tab] = await chrome.tabs.query({active: true, currentWindow: true});
+    const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
     await chrome.scripting.executeScript({
         target: { tabId: tab.id },
         files: ['turndown.js', 'js/content/inspector.js', 'js/content/macros.js', 'js/content/auto-detect.js', 'js/content/extractor.js', 'js/content/main.js']
@@ -351,7 +351,7 @@ document.getElementById('test-next-btn').addEventListener('click', async () => {
 
 // Inspect Next Button
 document.getElementById('inspect-next-btn').addEventListener('click', async () => {
-    const [tab] = await chrome.tabs.query({active: true, currentWindow: true});
+    const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
 
     // Inject script programmatically if it's not already there
     await chrome.scripting.executeScript({
@@ -467,7 +467,7 @@ function addFieldRow(name = '', selector = '', type = 'css', extractType = 'text
 
     // Inspect button logic
     inspectBtn.addEventListener('click', async () => {
-        const [tab] = await chrome.tabs.query({active: true, currentWindow: true});
+        const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
 
         // Inject script programmatically if it's not already there
         await chrome.scripting.executeScript({
@@ -503,7 +503,7 @@ function addFieldRow(name = '', selector = '', type = 'css', extractType = 'text
             format: div.querySelector('.f-format') ? div.querySelector('.f-format').value : 'raw'
         };
 
-        const [tab] = await chrome.tabs.query({active: true, currentWindow: true});
+        const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
 
         await chrome.scripting.executeScript({
             target: { tabId: tab.id },
@@ -578,7 +578,7 @@ function addActionRow(type = 'click', selector = '', text = '') {
             extractType: 'exists'
         };
 
-        const [tab] = await chrome.tabs.query({active: true, currentWindow: true});
+        const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
 
         await chrome.scripting.executeScript({
             target: { tabId: tab.id },
@@ -600,7 +600,7 @@ function addActionRow(type = 'click', selector = '', text = '') {
     });
 
     inspectBtn.addEventListener('click', async () => {
-        const [tab] = await chrome.tabs.query({active: true, currentWindow: true});
+        const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
         await chrome.scripting.executeScript({
             target: { tabId: tab.id },
             files: ['turndown.js', 'js/content/inspector.js', 'js/content/macros.js', 'js/content/auto-detect.js', 'js/content/extractor.js', 'js/content/main.js']
@@ -644,7 +644,7 @@ document.querySelectorAll('.toggle-vis').forEach(btn => {
             e.currentTarget.innerText = '👁️'; // Open eye: password is now visible
         } else {
             input.type = 'password';
-            e.currentTarget.innerText = '🙈'; // Closed eye: password is now hidden
+            e.currentTarget.innerText = '🔒'; // Closed eye: password is now hidden
         }
     });
 });
